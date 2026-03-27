@@ -16,6 +16,8 @@ var timerStart = 0;
 var autoAdvanceTimer = null;
 var HARD_TIME_LIMIT = 30;
 var AUTO_ADVANCE_DELAY = 1000;
+var isPracticeMode = false;
+var isReviewMode = false;
 
 // ── Screens ──
 
@@ -69,6 +71,17 @@ function renderDashboard() {
       (dailyDone >= dailyTarget ? '<span class="daily-done">Done!</span>' : '') +
     '</div>' +
     '<div class="daily-bar"><div class="daily-fill" style="width:' + dailyPct + '%"></div></div>';
+
+  // Dashboard action buttons
+  var actionsEl = document.getElementById('dashboardActions');
+  var actionsHtml = '';
+  var wrongBankCount = (data.wrongBank || []).length;
+  if (wrongBankCount > 0) {
+    actionsHtml += '<button class="dash-action-btn review-btn" onclick="QuizApp.startReviewMode()">' +
+      'Review Wrong Answers <span class="review-count">' + wrongBankCount + '</span></button>';
+  }
+  actionsHtml += '<button class="dash-action-btn progress-btn" onclick="QuizApp.showProgress()">Progress</button>';
+  actionsEl.innerHTML = actionsHtml;
 
   // Subject grid
   var grid = document.getElementById('subjectGrid');
@@ -238,6 +251,8 @@ function startQuiz(topic) {
   var data = QuizLoader.getThemeData(currentTheme);
   currentTopic = topic;
   isHardMode = (topic === 'hard' || topic === 'compare');
+  isPracticeMode = false;
+  isReviewMode = false;
   hardScore = 0;
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
@@ -272,7 +287,14 @@ function showQuestion() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
   var q = currentQuestions[currentIndex];
-  document.getElementById('qNumber').textContent = 'Question ' + (currentIndex + 1) + ' of ' + currentQuestions.length;
+  var qNumText = 'Question ' + (currentIndex + 1) + ' of ' + currentQuestions.length;
+  var qNumEl = document.getElementById('qNumber');
+  qNumEl.textContent = qNumText;
+  if (isPracticeMode) {
+    qNumEl.innerHTML = qNumText + ' <span class="mode-label practice">Practice Mode</span>';
+  } else if (isReviewMode) {
+    qNumEl.innerHTML = qNumText + ' <span class="mode-label review">Review Mode</span>';
+  }
   document.getElementById('qText').textContent = q.q;
   document.getElementById('scoreDisplay').textContent = score + ' / ' + currentQuestions.length;
   document.getElementById('progressFill').style.width = (currentIndex / currentQuestions.length * 100) + '%';
@@ -369,8 +391,16 @@ function pickAnswer(el, idx) {
     }
     document.getElementById('hardScoreDisplay').innerHTML = 'Points: <span class="pts">' + hardScore.toFixed(2) + '</span>';
   } else {
-    if (idx === q.ans) { score++; el.classList.add('correct'); }
-    else { el.classList.add('wrong'); wrongAnswers.push({ question: q.q, yourAnswer: q.opts[idx], correctAnswer: q.opts[q.ans], explain: q.explain }); }
+    if (idx === q.ans) {
+      score++; el.classList.add('correct');
+      // In review mode, remove correctly answered questions from wrong bank
+      if (isReviewMode) {
+        QuizStorage.removeFromWrongBank(q.q);
+      }
+    } else {
+      el.classList.add('wrong');
+      wrongAnswers.push({ question: q.q, yourAnswer: q.opts[idx], correctAnswer: q.opts[q.ans], explain: q.explain });
+    }
     document.getElementById('scoreDisplay').textContent = score + ' / ' + currentQuestions.length;
     tb.style.display = 'none';
   }
@@ -389,11 +419,16 @@ function nextQuestion() {
 function showResults() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
-  // Record result and get XP info
-  var result = QuizStorage.recordQuizResult(
-    currentSubject, currentTheme, currentTopic,
-    currentQuestions.length, score, wrongAnswers
-  );
+  // Record result and get XP info (skip recording for practice/review modes)
+  var result;
+  if (isPracticeMode || isReviewMode) {
+    result = { xpGained: 0, newBadges: [], level: 0, streak: 0 };
+  } else {
+    result = QuizStorage.recordQuizResult(
+      currentSubject, currentTheme, currentTopic,
+      currentQuestions.length, score, wrongAnswers
+    );
+  }
 
   showScreen('resultsScreen');
   var g = document.getElementById('gradeLabel');
@@ -413,9 +448,14 @@ function showResults() {
 
   // XP display
   var xpEl = document.getElementById('xpGained');
-  xpEl.innerHTML = '+' + result.xpGained + ' XP' +
-    (result.streak > 1 ? ' &middot; ' + result.streak + '-day streak 🔥' : '');
-  xpEl.style.display = 'block';
+  if (isPracticeMode || isReviewMode) {
+    xpEl.innerHTML = (isPracticeMode ? 'Practice Mode' : 'Review Mode') + ' — no XP awarded';
+    xpEl.style.display = 'block';
+  } else {
+    xpEl.innerHTML = '+' + result.xpGained + ' XP' +
+      (result.streak > 1 ? ' &middot; ' + result.streak + '-day streak 🔥' : '');
+    xpEl.style.display = 'block';
+  }
 
   // New badges
   var nbEl = document.getElementById('newBadges');
@@ -433,6 +473,12 @@ function showResults() {
     nbEl.style.display = 'none';
   }
 
+  // Practice wrong answers button
+  var practiceBtn = document.getElementById('practiceWrongBtn');
+  if (practiceBtn) {
+    practiceBtn.style.display = (wrongAnswers.length > 0 && !isPracticeMode) ? 'inline-block' : 'none';
+  }
+
   var wl = document.getElementById('wrongList');
   if (wrongAnswers.length === 0) {
     wl.innerHTML = '<p style="color:#38a169;font-weight:600;margin-top:12px;">Perfect! Every answer correct!</p>';
@@ -446,6 +492,221 @@ function showResults() {
     });
     wl.innerHTML = h;
   }
+}
+
+// ── Practice Wrong Answers ──
+
+function practiceWrongAnswers() {
+  if (wrongAnswers.length === 0) return;
+
+  // Build question objects from the wrongAnswers of the just-completed quiz
+  var practiceQs = [];
+  wrongAnswers.forEach(function(w) {
+    var found = findQuestionInData(w.question);
+    if (found) {
+      practiceQs.push(found);
+    }
+  });
+
+  if (practiceQs.length === 0) return;
+
+  isPracticeMode = true;
+  isReviewMode = false;
+  isHardMode = false;
+  hardScore = 0;
+  currentQuestions = shuffle(practiceQs);
+  currentIndex = 0; score = 0; wrongAnswers = []; answered = false;
+
+  showScreen('quizScreen');
+  document.getElementById('topicTitle').textContent = 'Practice Wrong Answers';
+  document.getElementById('timerBar').style.display = 'none';
+  document.getElementById('timerText').style.display = 'none';
+  document.getElementById('hardScoreDisplay').style.display = 'none';
+  document.getElementById('scoreDisplay').style.display = 'block';
+  showQuestion();
+}
+
+// ── Review Mode from Dashboard ──
+
+function startReviewMode() {
+  var items = QuizStorage.getRandomWrongBankItems(20);
+  if (items.length === 0) return;
+
+  // Reconstruct question objects from wrong bank entries
+  var reviewQs = [];
+  items.forEach(function(item) {
+    var found = findQuestionInData(item.q);
+    if (found) {
+      reviewQs.push(found);
+    }
+  });
+
+  if (reviewQs.length === 0) return;
+
+  isReviewMode = true;
+  isPracticeMode = false;
+  isHardMode = false;
+  hardScore = 0;
+  currentSubject = 'review';
+  currentTheme = 'review';
+  currentTopic = 'review';
+  currentQuestions = shuffle(reviewQs);
+  currentIndex = 0; score = 0; wrongAnswers = []; answered = false;
+
+  showScreen('quizScreen');
+  document.getElementById('topicTitle').textContent = 'Review Wrong Answers';
+  document.getElementById('timerBar').style.display = 'none';
+  document.getElementById('timerText').style.display = 'none';
+  document.getElementById('hardScoreDisplay').style.display = 'none';
+  document.getElementById('scoreDisplay').style.display = 'block';
+  showQuestion();
+}
+
+// ── Find question in loaded data ──
+
+function findQuestionInData(questionText) {
+  for (var themeId in window.QUIZ_DATA) {
+    if (!window.QUIZ_DATA.hasOwnProperty(themeId)) continue;
+    var themeData = window.QUIZ_DATA[themeId];
+    for (var cat in themeData) {
+      if (!themeData.hasOwnProperty(cat)) continue;
+      var questions = themeData[cat];
+      for (var i = 0; i < questions.length; i++) {
+        if (questions[i].q === questionText) {
+          return questions[i];
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ── Progress Dashboard ──
+
+function showProgress() {
+  showScreen('progressScreen');
+  var data = QuizStorage.getData();
+  var subjectStats = QuizStorage.getSubjectStats();
+  var dailyCounts = QuizStorage.getDailyCounts(data);
+
+  // Overall stats
+  var overallEl = document.getElementById('progressOverall');
+  var levelTitle = QuizStorage.getLevelTitle(data.level);
+  var nextXp = QuizStorage.xpForLevel(data.level + 1);
+
+  // Streak dots (last 7 days)
+  var streakDotsHtml = '<div style="margin-top:12px;"><div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Last 7 Days</div><div class="streak-dots">';
+  var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  for (var d = 6; d >= 0; d--) {
+    var date = new Date();
+    date.setDate(date.getDate() - d);
+    var dateStr = date.toISOString().slice(0, 10);
+    var dayCount = dailyCounts[dateStr] || 0;
+    var isActive = dayCount > 0;
+    var dayLabel = dayNames[date.getDay()];
+    streakDotsHtml += '<div class="streak-dot ' + (isActive ? 'active' : 'inactive') + '" title="' + dateStr + ': ' + dayCount + ' questions">' + dayLabel.charAt(0) + '</div>';
+  }
+  streakDotsHtml += '</div></div>';
+
+  overallEl.innerHTML =
+    '<div class="stat-row">' +
+      '<div class="stat-box">' +
+        '<div class="stat-value">' + data.xp + '</div>' +
+        '<div class="stat-label">Total XP</div>' +
+      '</div>' +
+      '<div class="stat-box">' +
+        '<div class="stat-value">' + data.level + '</div>' +
+        '<div class="stat-label">' + levelTitle + '</div>' +
+        '<div class="stat-sub">' + data.xp + ' / ' + nextXp + ' XP</div>' +
+      '</div>' +
+      '<div class="stat-box">' +
+        '<div class="stat-value">' + (data.streak || 0) + '</div>' +
+        '<div class="stat-label">Day Streak</div>' +
+      '</div>' +
+    '</div>' +
+    streakDotsHtml;
+
+  // Per-subject breakdown
+  var subjectsEl = document.getElementById('progressSubjects');
+  var html = '';
+  var subjects = QuizLoader.subjects;
+
+  for (var subId in subjects) {
+    if (!subjects.hasOwnProperty(subId)) continue;
+    var sub = subjects[subId];
+    var stats = subjectStats[subId];
+    var themes = QuizLoader.getThemesForSubject(subId);
+    var hasAnyData = !!stats;
+
+    // Calculate subject-level stats
+    var subjectAnswered = 0;
+    var subjectAccuracy = 0;
+    if (stats) {
+      // Count total attempts across all themes/topics
+      subjectAnswered = stats.totalAttempts;
+      // Calculate accuracy from best scores
+      var scoreCount = 0;
+      var scoreSum = 0;
+      for (var sk in stats.bestScores) {
+        if (stats.bestScores.hasOwnProperty(sk)) {
+          scoreSum += stats.bestScores[sk];
+          scoreCount++;
+        }
+      }
+      subjectAccuracy = scoreCount > 0 ? Math.round(scoreSum / scoreCount) : 0;
+    }
+
+    html += '<div class="progress-subject-card">';
+    html += '<div class="progress-subject-header">' +
+      '<div class="subject-icon">' + sub.icon + '</div>' +
+      '<div class="subject-name" style="color:' + sub.color + '">' + sub.name + '</div>' +
+      '<div class="progress-subject-meta">' +
+        (hasAnyData ? subjectAnswered + ' attempts &middot; ' + subjectAccuracy + '% avg' : 'Not started') +
+      '</div></div>';
+
+    // Per-theme progress bars
+    themes.forEach(function(theme) {
+      if (!theme.loaded) return;
+      var totalQsInTheme = theme.questionCount;
+      var themeStats = stats && stats.themes[theme.id];
+      var attempted = themeStats ? themeStats.attempted : 0;
+      var attemptPct = totalQsInTheme > 0 ? Math.min(100, Math.round((attempted / totalQsInTheme) * 100)) : 0;
+
+      // Theme color mapping
+      var barColor = sub.color;
+
+      html += '<div class="progress-theme-row">';
+      html += '<div class="progress-theme-label">' +
+        '<span class="theme-name">' + theme.name + '</span>' +
+        '<span class="theme-stat">' + attempted + ' / ' + totalQsInTheme + ' attempted</span>' +
+      '</div>';
+      html += '<div class="progress-theme-bar"><div class="progress-theme-fill" style="width:' + attemptPct + '%;background:' + barColor + '"></div></div>';
+
+      // Best scores per topic within this theme
+      if (themeStats && themeStats.bestScores) {
+        var hasScores = false;
+        var scoresHtml = '<div class="progress-best-scores">';
+        var catNames = QuizLoader.getCategoryNames(theme.id);
+        for (var topicKey in themeStats.bestScores) {
+          if (!themeStats.bestScores.hasOwnProperty(topicKey)) continue;
+          hasScores = true;
+          var topicName = catNames[topicKey] || topicKey;
+          scoresHtml += '<div class="progress-best-item">' +
+            '<span class="progress-best-name">' + topicName + '</span>' +
+            '<span class="progress-best-score">' + themeStats.bestScores[topicKey] + '%</span>' +
+          '</div>';
+        }
+        scoresHtml += '</div>';
+        if (hasScores) html += scoresHtml;
+      }
+
+      html += '</div>';
+    });
+
+    html += '</div>';
+  }
+
+  subjectsEl.innerHTML = html;
 }
 
 // ── Navigation ──
@@ -468,17 +729,43 @@ function goThemes() {
   selectSubject(currentSubject);
 }
 
+// ── Dark Mode ──
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  var btn = document.getElementById('themeToggle');
+  if (btn) btn.innerHTML = theme === 'dark' ? '&#9788;' : '&#9790;';
+}
+
+function toggleDarkMode() {
+  var current = document.documentElement.getAttribute('data-theme') || 'light';
+  var next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  try { localStorage.setItem('natsquiz-theme', next); } catch(e) {}
+}
+
+function initTheme() {
+  var saved = null;
+  try { saved = localStorage.getItem('natsquiz-theme'); } catch(e) {}
+  applyTheme(saved || 'light');
+}
+
 // ── Expose to HTML ──
 window.QuizApp = {
   startQuiz: startQuiz,
   goHome: goHome,
   goThemes: goThemes,
   goDashboard: goDashboard,
-  renderDashboard: renderDashboard
+  renderDashboard: renderDashboard,
+  toggleDarkMode: toggleDarkMode,
+  practiceWrongAnswers: practiceWrongAnswers,
+  startReviewMode: startReviewMode,
+  showProgress: showProgress
 };
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', function() {
+  initTheme();
   renderDashboard();
 });
 

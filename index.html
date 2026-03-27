@@ -5,15 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nat's Quiz - P4</title>
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/dark.css">
 </head>
 <body>
 <div class="app">
 
 <!-- Dashboard / Home -->
-<div class="screen" id="dashboardScreen">
+<div class="screen" id="dashboardScreen" style="position:relative">
+  <button class="theme-toggle" id="themeToggle" onclick="QuizApp.toggleDarkMode()" title="Toggle dark mode">&#9790;</button>
   <h1>Nat's Quiz</h1>
   <div class="dashboard-stats" id="dashStats"></div>
   <div class="daily-progress" id="dailyProgress"></div>
+  <div class="dashboard-actions" id="dashboardActions"></div>
   <h2 class="section-title">Choose a Subject</h2>
   <div class="subject-grid" id="subjectGrid"></div>
   <div class="badges-section" id="badgesSection"></div>
@@ -65,9 +68,18 @@
     <div class="new-badges" id="newBadges"></div>
     <div class="wrong-list" id="wrongList"></div>
   </div>
+  <button class="restart-btn practice-wrong-btn" id="practiceWrongBtn" onclick="QuizApp.practiceWrongAnswers()" style="display:none">Practice Wrong Answers</button>
   <button class="restart-btn" onclick="QuizApp.startQuiz(window._lastTopic)">Try Again</button>
   <button class="restart-btn home-btn" onclick="QuizApp.goHome()">Pick Another Topic</button>
   <button class="restart-btn home-btn" onclick="QuizApp.goDashboard()">Home</button>
+</div>
+
+<!-- Progress Dashboard -->
+<div class="screen" id="progressScreen" style="display:none">
+  <button class="back-btn" onclick="QuizApp.goDashboard()">&larr; Back to Home</button>
+  <h1>Progress</h1>
+  <div id="progressOverall" class="progress-overall"></div>
+  <div id="progressSubjects"></div>
 </div>
 
 <!-- Badge notification toast -->

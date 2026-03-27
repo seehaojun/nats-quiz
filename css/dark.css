@@ -1,0 +1,93 @@
+/* Nat's Quiz — Dark Mode Overrides */
+[data-theme="dark"] {
+  --bg: #1a202c;
+  --text: #e2e8f0;
+  --text-light: #cbd5e0;
+  --text-muted: #a0aec0;
+  --text-faint: #718096;
+  --primary: #63b3ed;
+  --primary-dark: #90cdf4;
+  --primary-light: #4299e1;
+  --primary-lighter: #90cdf4;
+  --card-bg: #2d3748;
+  --card-shadow: rgba(0,0,0,0.3);
+  --border: #4a5568;
+  --border-light: #2c5282;
+  --border-hover: #4299e1;
+  --hover-bg: #2d3748;
+  --hover-light: #2a4365;
+  --correct-bg: #22543d;
+  --correct-border: #48bb78;
+  --correct-text: #c6f6d5;
+  --correct-accent: #68d391;
+  --wrong-bg: #742a2a;
+  --wrong-border: #fc8181;
+  --wrong-text: #fed7d7;
+  --wrong-accent: #fc8181;
+  --explain-bg: #2d3748;
+  --explain-border: #d69e2e;
+  --warn-color: #ecc94b;
+  --warn-bg: #744210;
+  --warn-text: #fefcbf;
+  --silver-bg: #4a5568;
+  --silver-text: #e2e8f0;
+  --bronze-bg: #744210;
+  --bronze-text: #feebc8;
+  --try-bg: #742a2a;
+  --try-text: #fed7d7;
+  --progress-start: #4299e1;
+  --progress-end: #63b3ed;
+  --timer-start: #48bb78;
+  --timer-end: #68d391;
+  --timer-warn-start: #d69e2e;
+  --timer-warn-end: #ecc94b;
+  --timer-danger-start: #e53e3e;
+  --timer-danger-end: #fc8181;
+}
+
+/* Dark mode specific overrides for elements using hardcoded colors */
+[data-theme="dark"] .q-text { color: #e2e8f0; }
+[data-theme="dark"] .badge-item.earned { background: #2d3748; border-color: #d69e2e; }
+[data-theme="dark"] .badge-toast { background: #e2e8f0; color: #1a202c; }
+[data-theme="dark"] .wrong-item { background: #3b1a1a; border-color: #742a2a; }
+[data-theme="dark"] .wrong-item .wi-q { color: #e2e8f0; }
+
+/* Dark mode theme card hover backgrounds */
+[data-theme="dark"] .theme-card.diversity:hover { background: #2a4365; }
+[data-theme="dark"] .theme-card.cycles:hover { background: #22543d; }
+[data-theme="dark"] .theme-card.systems:hover { background: #3b1a1a; }
+[data-theme="dark"] .theme-card.energy:hover { background: #744210; }
+[data-theme="dark"] .theme-card.interactions:hover { background: #322659; }
+[data-theme="dark"] .theme-card.grammar:hover { background: #22543d; }
+[data-theme="dark"] .theme-card.vocabulary:hover { background: #2a4365; }
+[data-theme="dark"] .theme-card.comprehension:hover { background: #322659; }
+[data-theme="dark"] .theme-card.synthesis:hover { background: #744210; }
+[data-theme="dark"] .theme-card.wholenumbers:hover { background: #744210; }
+[data-theme="dark"] .theme-card.fractions:hover { background: #3b1a1a; }
+[data-theme="dark"] .theme-card.geometry:hover { background: #2a4365; }
+[data-theme="dark"] .theme-card.tables:hover { background: #22543d; }
+[data-theme="dark"] .theme-card.hanzi:hover { background: #3b1a1a; }
+[data-theme="dark"] .theme-card.yufa:hover { background: #744210; }
+[data-theme="dark"] .theme-card.cloze:hover { background: #322659; }
+[data-theme="dark"] .theme-card.yuedu:hover { background: #2a4365; }
+
+/* Dark mode toggle button */
+.theme-toggle {
+  background: none;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  line-height: 1;
+}
+.theme-toggle:hover { border-color: var(--primary); background: var(--hover-bg); }
+.theme-toggle:active { transform: scale(0.92); }

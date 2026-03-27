@@ -238,6 +238,67 @@ function recordQuizResult(subject, theme, topic, totalQs, correctQs, wrongList) 
   return { xpGained: xpGained, newBadges: newBadges, level: data.level, streak: data.streak };
 }
 
+// ── Wrong bank helpers ──
+
+function getWrongBankItems() {
+  var data = getData();
+  return data.wrongBank || [];
+}
+
+function getRandomWrongBankItems(max) {
+  var items = getWrongBankItems();
+  if (items.length <= max) return items.slice();
+  // Fisher-Yates partial shuffle
+  var a = items.slice();
+  for (var i = a.length - 1; i > 0 && i >= a.length - max; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a.slice(a.length - max);
+}
+
+function removeFromWrongBank(questionText) {
+  var data = getData();
+  data.wrongBank = (data.wrongBank || []).filter(function(w) {
+    return w.q !== questionText;
+  });
+  save(data);
+}
+
+// ── Per-subject stats ──
+
+function getSubjectStats() {
+  var data = getData();
+  var stats = {};
+  for (var key in data.scores) {
+    if (!data.scores.hasOwnProperty(key)) continue;
+    var parts = key.split('/');
+    var subject = parts[0];
+    var theme = parts[1];
+    var topic = parts[2];
+    var s = data.scores[key];
+
+    if (!stats[subject]) {
+      stats[subject] = { totalAnswered: 0, totalAttempts: 0, themes: {}, bestScores: {} };
+    }
+    stats[subject].totalAttempts += s.attempts;
+
+    if (!stats[subject].themes[theme]) {
+      stats[subject].themes[theme] = { attempted: 0, bestScores: {} };
+    }
+    stats[subject].themes[theme].attempted += s.attempts;
+    stats[subject].themes[theme].bestScores[topic] = s.best;
+
+    var scoreKey = theme + '/' + topic;
+    stats[subject].bestScores[scoreKey] = s.best;
+  }
+  return stats;
+}
+
+function getDailyCounts(data) {
+  return data._dailyCounts || {};
+}
+
 // ── Expose ──
 
 window.QuizStorage = {
@@ -250,7 +311,12 @@ window.QuizStorage = {
   xpForLevel: xpForLevel,
   getLevelTitle: getLevelTitle,
   BADGE_DEFS: BADGE_DEFS,
-  XP_PER_CORRECT: XP_PER_CORRECT
+  XP_PER_CORRECT: XP_PER_CORRECT,
+  getWrongBankItems: getWrongBankItems,
+  getRandomWrongBankItems: getRandomWrongBankItems,
+  removeFromWrongBank: removeFromWrongBank,
+  getSubjectStats: getSubjectStats,
+  getDailyCounts: getDailyCounts
 };
 
 })();
