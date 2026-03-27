@@ -3,29 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nat's Quiz - P4 Science</title>
+<title>Nat's Quiz - P4</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 <div class="app">
 
-<!-- Theme Selection -->
-<div class="theme-select" id="themeScreen">
+<!-- Dashboard / Home -->
+<div class="screen" id="dashboardScreen">
   <h1>Nat's Quiz</h1>
-  <p>P4 Science — Pick a theme to start</p>
+  <div class="dashboard-stats" id="dashStats"></div>
+  <div class="daily-progress" id="dailyProgress"></div>
+  <h2 class="section-title">Choose a Subject</h2>
+  <div class="subject-grid" id="subjectGrid"></div>
+  <div class="badges-section" id="badgesSection"></div>
+</div>
+
+<!-- Theme Selection -->
+<div class="screen" id="themeScreen" style="display:none">
+  <button class="back-btn" onclick="QuizApp.goDashboard()">&larr; All Subjects</button>
+  <h1 id="themeScreenTitle">Science</h1>
+  <p id="themeScreenDesc">Pick a theme to start</p>
   <div class="theme-grid" id="themeGrid"></div>
 </div>
 
 <!-- Topic Selection -->
-<div class="home" id="homeScreen">
+<div class="screen" id="homeScreen" style="display:none">
   <button class="back-btn" onclick="QuizApp.goThemes()">&larr; All Themes</button>
-  <h1 id="homeTitle">P4 Science Quiz</h1>
+  <h1 id="homeTitle">Diversity</h1>
   <p id="homeSubtitle">Pick a topic</p>
   <div id="topicButtons"></div>
 </div>
 
 <!-- Quiz -->
-<div class="quiz" id="quizScreen">
+<div class="screen" id="quizScreen" style="display:none">
   <button class="back-btn" onclick="QuizApp.goHome()">&larr; Back</button>
   <div class="quiz-header">
     <h2 id="topicTitle"></h2>
@@ -45,24 +56,49 @@
 </div>
 
 <!-- Results -->
-<div class="results" id="resultsScreen">
+<div class="screen" id="resultsScreen" style="display:none">
   <div class="results-card">
     <h2>Quiz Done!</h2>
+    <div class="xp-gained" id="xpGained"></div>
     <div class="big-score"><span id="finalScore"></span></div>
     <div class="grade" id="gradeLabel"></div>
+    <div class="new-badges" id="newBadges"></div>
     <div class="wrong-list" id="wrongList"></div>
   </div>
   <button class="restart-btn" onclick="QuizApp.startQuiz(window._lastTopic)">Try Again</button>
   <button class="restart-btn home-btn" onclick="QuizApp.goHome()">Pick Another Topic</button>
-  <button class="restart-btn home-btn" onclick="QuizApp.goThemes()">All Themes</button>
+  <button class="restart-btn home-btn" onclick="QuizApp.goDashboard()">Home</button>
 </div>
+
+<!-- Badge notification toast -->
+<div class="badge-toast" id="badgeToast"></div>
 
 </div>
 
-<!-- Data -->
+<!-- Data files — Science -->
 <script src="data/diversity.js"></script>
+<script src="data/cycles.js"></script>
+<script src="data/systems.js"></script>
+<script src="data/energy.js"></script>
+<script src="data/interactions.js"></script>
+<!-- Data files — English -->
+<script src="data/grammar.js"></script>
+<script src="data/vocabulary.js"></script>
+<script src="data/comprehension.js"></script>
+<script src="data/synthesis.js"></script>
+<!-- Data files — Math -->
+<script src="data/wholenumbers.js"></script>
+<script src="data/fractions.js"></script>
+<script src="data/geometry.js"></script>
+<script src="data/tables.js"></script>
+<!-- Data files — Chinese -->
+<script src="data/hanzi.js"></script>
+<script src="data/yufa.js"></script>
+<script src="data/cloze.js"></script>
+<script src="data/yuedu.js"></script>
 
 <!-- Engine -->
+<script src="js/storage.js"></script>
 <script src="js/data-loader.js"></script>
 <script src="js/app.js"></script>
 </body>

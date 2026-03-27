@@ -1,4 +1,4 @@
-/* Nat's Quiz — P4 Science */
+/* Nat's Quiz — P4 */
 :root {
   --bg: #f0f4ff;
   --text: #333;
@@ -55,11 +55,64 @@ body {
 }
 
 .app { max-width: 700px; margin: 0 auto; padding: 16px; }
+.screen { animation: fadeInUp 0.25s ease; }
+
+/* ── Dashboard ── */
+#dashboardScreen { text-align: center; padding-top: 16px; }
+#dashboardScreen h1 { font-size: 28px; color: var(--primary); margin-bottom: 16px; }
+.section-title { font-size: 18px; color: var(--primary); margin: 20px 0 12px; text-align: center; }
+
+.dashboard-stats { margin-bottom: 16px; }
+.stat-row { display: flex; gap: 10px; justify-content: center; }
+.stat-box {
+  flex: 1; background: var(--card-bg); border-radius: 14px; padding: 14px 10px;
+  box-shadow: 0 2px 8px var(--card-shadow); text-align: center; max-width: 200px;
+}
+.stat-value { font-size: 28px; font-weight: 800; color: var(--primary); }
+.stat-label { font-size: 13px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+.stat-sub { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+
+.xp-bar { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.xp-fill { height: 100%; background: linear-gradient(90deg, #ecc94b, #d69e2e); border-radius: 3px; transition: width 0.5s ease; }
+
+.daily-bar-label { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; padding: 0 2px; }
+.daily-done { color: var(--correct-accent); font-weight: 700; }
+.daily-bar { width: 100%; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
+.daily-fill { height: 100%; background: linear-gradient(90deg, var(--correct-border), var(--correct-accent)); border-radius: 5px; transition: width 0.5s ease; }
+
+/* ── Subject Grid ── */
+.subject-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.subject-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px 12px; border-radius: 16px; border: 3px solid var(--border);
+  background: var(--card-bg); cursor: pointer; transition: all 0.2s;
+}
+.subject-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px var(--card-shadow); }
+.subject-card.disabled { opacity: 0.35; pointer-events: none; }
+.subject-icon { font-size: 40px; margin-bottom: 8px; }
+.subject-name { font-size: 18px; font-weight: 700; }
+.subject-count { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+/* ── Badges ── */
+.badge-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 0 8px; }
+.badge-item {
+  width: 72px; text-align: center; padding: 8px 4px; border-radius: 10px;
+  background: var(--card-bg); border: 2px solid var(--border); opacity: 0.35;
+  transition: all 0.2s;
+}
+.badge-item.earned { opacity: 1; border-color: #ecc94b; background: #fffff0; }
+.badge-icon { font-size: 28px; }
+.badge-name { font-size: 10px; color: var(--text-muted); margin-top: 2px; font-weight: 600; }
 
 /* ── Theme Selection ── */
-.theme-select { text-align: center; padding-top: 20px; }
-.theme-select h1 { font-size: 28px; color: var(--primary); margin-bottom: 4px; }
-.theme-select p { color: var(--text-light); margin-bottom: 20px; font-size: 16px; }
+#themeScreen { text-align: center; padding-top: 16px; }
+#themeScreen h1 { font-size: 28px; color: var(--primary); margin-bottom: 4px; }
+#themeScreen p { color: var(--text-light); margin-bottom: 20px; font-size: 16px; }
 .theme-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -70,12 +123,12 @@ body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 20px 12px; border-radius: 14px; border: 2px solid var(--border);
   background: var(--card-bg); cursor: pointer; transition: all 0.2s;
-  text-decoration: none; color: inherit;
 }
 .theme-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 4px 12px var(--card-shadow); }
 .theme-card .theme-icon { font-size: 36px; margin-bottom: 8px; }
 .theme-card .theme-name { font-size: 16px; font-weight: 700; color: var(--primary); }
 .theme-card .theme-count { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.theme-card .theme-best { font-size: 12px; color: var(--correct-accent); font-weight: 600; margin-top: 4px; }
 .theme-card.diversity { border-color: #bee3f8; }
 .theme-card.diversity:hover { border-color: #63b3ed; background: #ebf8ff; }
 .theme-card.cycles { border-color: #c6f6d5; }
@@ -86,12 +139,40 @@ body {
 .theme-card.energy:hover { border-color: #ed8936; background: #fffaf0; }
 .theme-card.interactions { border-color: #e9d8fd; }
 .theme-card.interactions:hover { border-color: #9f7aea; background: #faf5ff; }
+/* English themes */
+.theme-card.grammar { border-color: #c6f6d5; }
+.theme-card.grammar:hover { border-color: #48bb78; background: #f0fff4; }
+.theme-card.vocabulary { border-color: #bee3f8; }
+.theme-card.vocabulary:hover { border-color: #63b3ed; background: #ebf8ff; }
+.theme-card.comprehension { border-color: #e9d8fd; }
+.theme-card.comprehension:hover { border-color: #9f7aea; background: #faf5ff; }
+.theme-card.synthesis { border-color: #feebc8; }
+.theme-card.synthesis:hover { border-color: #ed8936; background: #fffaf0; }
+/* Math themes */
+.theme-card.wholenumbers { border-color: #feebc8; }
+.theme-card.wholenumbers:hover { border-color: #d69e2e; background: #fffff0; }
+.theme-card.fractions { border-color: #fed7d7; }
+.theme-card.fractions:hover { border-color: #fc8181; background: #fff5f5; }
+.theme-card.geometry { border-color: #bee3f8; }
+.theme-card.geometry:hover { border-color: #63b3ed; background: #ebf8ff; }
+.theme-card.tables { border-color: #c6f6d5; }
+.theme-card.tables:hover { border-color: #48bb78; background: #f0fff4; }
+/* Chinese themes */
+.theme-card.hanzi { border-color: #fed7d7; }
+.theme-card.hanzi:hover { border-color: #e53e3e; background: #fff5f5; }
+.theme-card.yufa { border-color: #feebc8; }
+.theme-card.yufa:hover { border-color: #ed8936; background: #fffaf0; }
+.theme-card.cloze { border-color: #e9d8fd; }
+.theme-card.cloze:hover { border-color: #9f7aea; background: #faf5ff; }
+.theme-card.yuedu { border-color: #bee3f8; }
+.theme-card.yuedu:hover { border-color: #63b3ed; background: #ebf8ff; }
+
 .theme-card.disabled { opacity: 0.4; pointer-events: none; }
 
 /* ── Topic Selection (Home) ── */
-.home { text-align: center; padding-top: 30px; display: none; }
-.home h1 { font-size: 28px; color: var(--primary); margin-bottom: 8px; }
-.home p { color: var(--text-light); margin-bottom: 24px; font-size: 16px; }
+#homeScreen { text-align: center; padding-top: 20px; }
+#homeScreen h1 { font-size: 28px; color: var(--primary); margin-bottom: 8px; }
+#homeScreen p { color: var(--text-light); margin-bottom: 24px; font-size: 16px; }
 
 .topic-btn {
   display: block; width: 100%; padding: 16px; margin-bottom: 12px;
@@ -101,6 +182,7 @@ body {
 }
 .topic-btn:hover { background: var(--hover-light); border-color: var(--border-hover); }
 .topic-btn .count { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+.topic-best { font-size: 12px; font-weight: 600; color: var(--correct-accent); float: right; }
 .all-btn {
   background: var(--primary); color: white; border-color: var(--primary);
   text-align: center; font-size: 18px; margin-top: 8px;
@@ -119,7 +201,6 @@ body {
 .hard-btn:hover { background: #c53030; border-color: #c53030; }
 
 /* ── Quiz Screen ── */
-.quiz { display: none; }
 .quiz-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .quiz-header h2 { font-size: 18px; color: var(--primary); }
 .score-display {
@@ -171,10 +252,9 @@ body {
 .time-bonus.penalty { color: var(--wrong-accent); }
 
 /* ── Results ── */
-.results { display: none; text-align: center; padding-top: 30px; }
 .results-card {
   background: var(--card-bg); border-radius: 16px; padding: 32px 24px;
-  box-shadow: 0 2px 12px var(--card-shadow); margin-bottom: 20px;
+  box-shadow: 0 2px 12px var(--card-shadow); margin-bottom: 20px; text-align: center;
 }
 .results-card h2 { font-size: 24px; color: var(--primary); margin-bottom: 8px; }
 .big-score { font-size: 64px; font-weight: 800; color: var(--primary); margin: 16px 0; }
@@ -189,12 +269,21 @@ body {
 .grade.bronze { background: var(--bronze-bg); color: var(--bronze-text); }
 .grade.try { background: var(--try-bg); color: var(--try-text); }
 
+.xp-gained {
+  font-size: 16px; font-weight: 700; color: #d69e2e; margin-bottom: 8px;
+  animation: fadeInUp 0.4s ease;
+}
+.new-badges { margin: 12px 0; }
+.new-badge-label { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+.new-badge { font-size: 18px; font-weight: 700; color: #d69e2e; animation: scaleIn 0.5s ease; }
+
 .wrong-list { text-align: left; margin-top: 20px; }
 .wrong-list h3 { font-size: 16px; color: var(--wrong-accent); margin-bottom: 12px; }
 .wrong-item { background: #fff5f5; border: 1px solid var(--wrong-bg); border-radius: 10px; padding: 12px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
 .wrong-item .wi-q { font-weight: 600; color: var(--text); margin-bottom: 4px; }
 .wrong-item .wi-a { color: var(--correct-accent); }
 
+#resultsScreen { text-align: center; padding-top: 20px; }
 .restart-btn {
   display: inline-block; padding: 14px 32px; background: var(--primary-light); color: white;
   border: none; border-radius: 10px; font-size: 17px; font-weight: 600; cursor: pointer; margin: 8px;
@@ -207,9 +296,19 @@ body {
 .back-btn { background: none; border: none; color: var(--primary-light); font-size: 15px; cursor: pointer; margin-bottom: 12px; font-weight: 600; }
 .back-btn:hover { text-decoration: underline; }
 
+/* ── Badge Toast ── */
+.badge-toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: #1a202c; color: white; padding: 12px 24px; border-radius: 12px;
+  font-size: 15px; font-weight: 600; display: none; z-index: 100;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
 /* ── Mobile ── */
 @media (max-width: 480px) {
-  .theme-grid { grid-template-columns: 1fr; }
+  .theme-grid, .subject-grid { grid-template-columns: 1fr; }
+  .stat-row { flex-direction: column; align-items: center; }
+  .stat-box { max-width: 100%; width: 100%; }
   .q-text { font-size: clamp(16px, 4.5vw, 19px); }
   .options li { padding: 16px; min-height: 48px; }
   .topic-btn { padding: 18px 16px; min-height: 48px; }
