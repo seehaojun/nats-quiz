@@ -142,6 +142,10 @@ body {
 .theme-card.energy:hover { border-color: #ed8936; background: #fffaf0; }
 .theme-card.interactions { border-color: #e9d8fd; }
 .theme-card.interactions:hover { border-color: #9f7aea; background: #faf5ff; }
+.theme-card.matter { border-color: #b2f5ea; }
+.theme-card.matter:hover { border-color: #38b2ac; background: #e6fffa; }
+.theme-card.magnets { border-color: #fed7e2; }
+.theme-card.magnets:hover { border-color: #ed64a6; background: #fff5f7; }
 /* English themes */
 .theme-card.grammar { border-color: #c6f6d5; }
 .theme-card.grammar:hover { border-color: #48bb78; background: #f0fff4; }
@@ -151,6 +155,12 @@ body {
 .theme-card.comprehension:hover { border-color: #9f7aea; background: #faf5ff; }
 .theme-card.synthesis { border-color: #feebc8; }
 .theme-card.synthesis:hover { border-color: #ed8936; background: #fffaf0; }
+.theme-card.editing { border-color: #fed7e2; }
+.theme-card.editing:hover { border-color: #ed64a6; background: #fff5f7; }
+.theme-card.visualtext { border-color: #b2f5ea; }
+.theme-card.visualtext:hover { border-color: #38b2ac; background: #e6fffa; }
+.theme-card.vocabcloze { border-color: #fefcbf; }
+.theme-card.vocabcloze:hover { border-color: #d69e2e; background: #fffff0; }
 /* Math themes */
 .theme-card.wholenumbers { border-color: #feebc8; }
 .theme-card.wholenumbers:hover { border-color: #d69e2e; background: #fffff0; }
@@ -158,6 +168,12 @@ body {
 .theme-card.fractions:hover { border-color: #fc8181; background: #fff5f5; }
 .theme-card.geometry { border-color: #bee3f8; }
 .theme-card.geometry:hover { border-color: #63b3ed; background: #ebf8ff; }
+.theme-card.decimals { border-color: #e9d8fd; }
+.theme-card.decimals:hover { border-color: #9f7aea; background: #faf5ff; }
+.theme-card.measurement { border-color: #b2f5ea; }
+.theme-card.measurement:hover { border-color: #38b2ac; background: #e6fffa; }
+.theme-card.money { border-color: #fed7e2; }
+.theme-card.money:hover { border-color: #ed64a6; background: #fff5f7; }
 .theme-card.tables { border-color: #c6f6d5; }
 .theme-card.tables:hover { border-color: #48bb78; background: #f0fff4; }
 /* Chinese themes */
@@ -169,6 +185,10 @@ body {
 .theme-card.cloze:hover { border-color: #9f7aea; background: #faf5ff; }
 .theme-card.yuedu { border-color: #bee3f8; }
 .theme-card.yuedu:hover { border-color: #63b3ed; background: #ebf8ff; }
+.theme-card.chengyu { border-color: #fbb6ce; }
+.theme-card.chengyu:hover { border-color: #d53f8c; background: #fff5f7; }
+.theme-card.sentence { border-color: #c6f6d5; }
+.theme-card.sentence:hover { border-color: #38a169; background: #f0fff4; }
 
 .theme-card.disabled { opacity: 0.4; pointer-events: none; }
 
