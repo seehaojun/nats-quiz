@@ -146,6 +146,8 @@ body {
 .theme-card.matter:hover { border-color: #38b2ac; background: #e6fffa; }
 .theme-card.magnets { border-color: #fed7e2; }
 .theme-card.magnets:hover { border-color: #ed64a6; background: #fff5f7; }
+.theme-card.openended { border-color: #faf089; }
+.theme-card.openended:hover { border-color: #d69e2e; background: #fffff0; }
 /* English themes */
 .theme-card.grammar { border-color: #c6f6d5; }
 .theme-card.grammar:hover { border-color: #48bb78; background: #f0fff4; }
