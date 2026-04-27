@@ -22,7 +22,10 @@ var isReviewMode = false;
 // Open-ended question state
 var openMarksAwarded = 0;
 var openMarksMax = 0;
-var DEFAULT_GRADER_URL = 'https://nats-quiz-grader.vercel.app/api/grade';
+// Same-origin: the grader is deployed alongside the static site on Vercel.
+// localStorage override is still useful for opening index.html via file://
+// (where relative URLs can't resolve) or pointing at a staging deployment.
+var DEFAULT_GRADER_URL = '/api/grade';
 function getGraderUrl() {
   try {
     var override = localStorage.getItem('natsquiz-grader-url');

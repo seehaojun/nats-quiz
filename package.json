@@ -1,0 +1,13 @@
+{
+  "name": "nats-quiz",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static P4 quiz app with a Vercel serverless grader (Claude) for open-ended answers.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.0"
+  }
+}
