@@ -18,6 +18,7 @@ var QuizLoader = {
     interactions: { subject: 'science', name: 'Interactions', icon: '🤝', color: 'interactions', description: 'Food chains, adaptations, environment' },
     matter:       { subject: 'science', name: 'Matter', icon: '🧊', color: 'matter', description: 'States of matter, changes of state' },
     magnets:      { subject: 'science', name: 'Magnets', icon: '🧲', color: 'magnets', description: 'Magnetic properties, poles, uses of magnets' },
+    openended:    { subject: 'science', name: 'Open-Ended Questions', icon: '✍️', color: 'openended', description: 'Long-form answers across all Science topics, graded by Claude' },
     // English
     grammar:      { subject: 'english', name: 'Grammar', icon: '✏️', color: 'grammar', description: 'Tenses, articles, prepositions, conjunctions' },
     vocabulary:   { subject: 'english', name: 'Vocabulary', icon: '📝', color: 'vocabulary', description: 'Word meanings, synonyms, antonyms' },
@@ -162,6 +163,38 @@ var QuizLoader = {
       names.ch2 = 'Descriptive Words';
       names.ch3 = 'Action Words';
     }
+    // Open-ended virtual theme: categories are source theme ids.
+    if (themeId === 'openended') {
+      var labels = {
+        diversity: 'Diversity',
+        cycles: 'Life Cycles & Water Cycle',
+        systems: 'Plant & Human Systems',
+        energy: 'Energy',
+        interactions: 'Interactions',
+        matter: 'Matter',
+        magnets: 'Magnets'
+      };
+      for (var lk in labels) {
+        if (names[lk]) names[lk] = labels[lk];
+      }
+    }
     return names;
   }
 };
+
+// Synthesize a virtual `openended` theme that pools every theme's `open`
+// array under the source theme's id. This runs once at startup, after all
+// data files have loaded (data-loader.js comes after data/*.js in index.html).
+(function buildOpenEndedTheme() {
+  var sciencePool = ['diversity', 'cycles', 'systems', 'energy', 'interactions', 'matter', 'magnets'];
+  var pooled = {};
+  sciencePool.forEach(function(themeId) {
+    var theme = window.QUIZ_DATA[themeId];
+    if (theme && Array.isArray(theme.open) && theme.open.length > 0) {
+      pooled[themeId] = theme.open;
+    }
+  });
+  if (Object.keys(pooled).length > 0) {
+    window.QUIZ_DATA.openended = pooled;
+  }
+})();
