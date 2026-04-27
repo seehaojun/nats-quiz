@@ -52,6 +52,10 @@
 [data-theme="dark"] .wrong-item { background: #3b1a1a; border-color: #742a2a; }
 [data-theme="dark"] .wrong-item .wi-q { color: #e2e8f0; }
 
+/* Open-ended question feedback rows need a subtle background in dark mode */
+[data-theme="dark"] .feedback-row { background: #1f2733; }
+[data-theme="dark"] .open-marks-label { background: #2a4365; color: #90cdf4; }
+
 /* Dark mode theme card hover backgrounds */
 [data-theme="dark"] .theme-card.diversity:hover { background: #2a4365; }
 [data-theme="dark"] .theme-card.cycles:hover { background: #22543d; }

@@ -19,6 +19,21 @@ var AUTO_ADVANCE_DELAY = 1000;
 var isPracticeMode = false;
 var isReviewMode = false;
 
+// Open-ended question state
+var openMarksAwarded = 0;
+var openMarksMax = 0;
+// Same-origin: the grader is deployed alongside the static site on Vercel.
+// localStorage override is still useful for opening index.html via file://
+// (where relative URLs can't resolve) or pointing at a staging deployment.
+var DEFAULT_GRADER_URL = '/api/grade';
+function getGraderUrl() {
+  try {
+    var override = localStorage.getItem('natsquiz-grader-url');
+    if (override) return override;
+  } catch(e) {}
+  return DEFAULT_GRADER_URL;
+}
+
 // ── Screens ──
 
 function showScreen(id) {
@@ -254,6 +269,8 @@ function startQuiz(topic) {
   isPracticeMode = false;
   isReviewMode = false;
   hardScore = 0;
+  openMarksAwarded = 0;
+  openMarksMax = 0;
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
 
@@ -270,6 +287,11 @@ function startQuiz(topic) {
     currentQuestions = shuffle(data[topic].slice());
     var names = QuizLoader.getCategoryNames(currentTheme);
     document.getElementById('topicTitle').textContent = names[topic] || topic;
+  }
+
+  // Open-ended questions never enter timed mode — they need think time.
+  if (isHardMode) {
+    currentQuestions = currentQuestions.filter(function(q) { return q.type !== 'open'; });
   }
 
   window._lastTopic = topic;
@@ -296,9 +318,19 @@ function showQuestion() {
     qNumEl.innerHTML = qNumText + ' <span class="mode-label review">Review Mode</span>';
   }
   document.getElementById('qText').textContent = q.q;
-  document.getElementById('scoreDisplay').textContent = score + ' / ' + currentQuestions.length;
+  document.getElementById('scoreDisplay').textContent = formatScore(score) + ' / ' + currentQuestions.length;
   document.getElementById('progressFill').style.width = (currentIndex / currentQuestions.length * 100) + '%';
 
+  // Always tear down any open-Q UI from the previous question.
+  removeOpenQuestionUI();
+
+  if (q.type === 'open') {
+    showOpenQuestion(q);
+    return;
+  }
+
+  // MCQ rendering
+  document.getElementById('optionsList').style.display = '';
   var indices = q.opts.map(function(_, i) { return i; });
   var shuffled = shuffle(indices);
   var list = document.getElementById('optionsList');
@@ -359,6 +391,221 @@ function hardTimeUp() {
   autoAdvanceTimer = setTimeout(function() { nextQuestion(); }, AUTO_ADVANCE_DELAY);
 }
 
+// ── Open-ended questions ──
+
+function formatScore(s) {
+  return Math.abs(s - Math.round(s)) < 0.001 ? String(Math.round(s)) : s.toFixed(1);
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+function removeOpenQuestionUI() {
+  var existing = document.getElementById('openQuestionBox');
+  if (existing) existing.parentNode.removeChild(existing);
+  var existingNext = document.getElementById('openNextBtn');
+  if (existingNext) existingNext.parentNode.removeChild(existingNext);
+}
+
+function showOpenQuestion(q) {
+  // Hide MCQ-specific UI
+  document.getElementById('optionsList').style.display = 'none';
+  document.getElementById('explanation').style.display = 'none';
+  document.getElementById('timeBonus').style.display = 'none';
+
+  var card = document.querySelector('#quizScreen .question-card');
+  var box = document.createElement('div');
+  box.id = 'openQuestionBox';
+  box.className = 'open-box';
+  var maxMarks = q.max_marks || 3;
+  box.innerHTML =
+    '<div class="open-marks-label">Open-Ended &middot; ' + maxMarks + ' mark' + (maxMarks === 1 ? '' : 's') + '</div>' +
+    '<textarea id="openAnswer" class="open-textarea" placeholder="Type your answer in your own words..." maxlength="2000"></textarea>' +
+    '<div class="open-actions">' +
+      '<button id="openSubmit" class="open-submit-btn" type="button">Check My Answer</button>' +
+    '</div>' +
+    '<div id="openFeedback" class="open-feedback" style="display:none"></div>';
+  card.appendChild(box);
+
+  document.getElementById('openSubmit').onclick = submitOpenAnswer;
+  setTimeout(function() {
+    var ta = document.getElementById('openAnswer');
+    if (ta) ta.focus();
+  }, 50);
+}
+
+function submitOpenAnswer() {
+  if (answered) return;
+  var q = currentQuestions[currentIndex];
+  var ta = document.getElementById('openAnswer');
+  var btn = document.getElementById('openSubmit');
+  var feedback = document.getElementById('openFeedback');
+  var studentAnswer = (ta.value || '').trim();
+  if (!studentAnswer) {
+    ta.classList.add('open-textarea-error');
+    setTimeout(function() { ta.classList.remove('open-textarea-error'); }, 600);
+    return;
+  }
+  answered = true;
+  ta.disabled = true;
+  btn.disabled = true;
+  btn.textContent = 'Asking Claude...';
+  feedback.style.display = 'block';
+  feedback.className = 'open-feedback open-feedback-loading';
+  feedback.innerHTML = '<span class="open-spinner"></span> Asking Claude to grade your answer...';
+
+  var maxMarks = q.max_marks || 3;
+  var payload = {
+    question: q.q,
+    model_answer: q.model_answer || '',
+    rubric: q.rubric || '',
+    max_marks: maxMarks,
+    student_answer: studentAnswer
+  };
+
+  fetch(getGraderUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+    .then(function(r) {
+      if (!r.ok) throw new Error('grader_http_' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      if (data && data.error) throw new Error(data.error);
+      var max = (typeof data.max === 'number') ? data.max : maxMarks;
+      var rawScore = (typeof data.score === 'number') ? data.score : 0;
+      var awardedScore = Math.max(0, Math.min(max, rawScore));
+      renderOpenFeedback(q, studentAnswer, awardedScore, max, data, /*isFallback*/ false);
+      recordOpenResult(q, studentAnswer, awardedScore, max, data);
+    })
+    .catch(function(err) {
+      // Graceful offline fallback: show model answer and let user self-grade.
+      renderOpenFallback(q, studentAnswer, err);
+    });
+}
+
+function renderOpenFeedback(q, studentAnswer, awardedScore, max, data, isFallback) {
+  var feedback = document.getElementById('openFeedback');
+  feedback.className = 'open-feedback';
+  var pct = max > 0 ? (awardedScore / max) : 0;
+  var scoreClass = pct >= 0.85 ? 'open-score-good' : (pct >= 0.5 ? 'open-score-partial' : 'open-score-low');
+  var html =
+    '<div class="open-score ' + scoreClass + '">Score: ' + formatScore(awardedScore) + ' / ' + max + '</div>';
+  if (data && data.what_went_well) {
+    html += '<div class="feedback-row feedback-good">' +
+      '<div class="feedback-label">What went well</div>' +
+      '<div class="feedback-body">' + escapeHtml(data.what_went_well) + '</div></div>';
+  }
+  if (data && data.what_was_missing) {
+    html += '<div class="feedback-row feedback-missing">' +
+      '<div class="feedback-label">What was missing</div>' +
+      '<div class="feedback-body">' + escapeHtml(data.what_was_missing) + '</div></div>';
+  }
+  if (data && data.suggested_phrasing) {
+    html += '<div class="feedback-row feedback-suggest">' +
+      '<div class="feedback-label">A model answer</div>' +
+      '<div class="feedback-body">' + escapeHtml(data.suggested_phrasing) + '</div></div>';
+  } else if (q.model_answer) {
+    html += '<div class="feedback-row feedback-suggest">' +
+      '<div class="feedback-label">A model answer</div>' +
+      '<div class="feedback-body">' + escapeHtml(q.model_answer) + '</div></div>';
+  }
+  feedback.innerHTML = html;
+  appendOpenNextButton();
+}
+
+function renderOpenFallback(q, studentAnswer, err) {
+  var feedback = document.getElementById('openFeedback');
+  feedback.className = 'open-feedback open-feedback-fallback';
+  var maxMarks = q.max_marks || 3;
+  feedback.innerHTML =
+    '<div class="feedback-row feedback-missing">' +
+      '<div class="feedback-label">Couldn\'t reach the grader</div>' +
+      '<div class="feedback-body">No internet, or the grader isn\'t deployed yet. Compare your answer with the model answer below and self-grade.</div>' +
+    '</div>' +
+    '<div class="feedback-row feedback-suggest">' +
+      '<div class="feedback-label">Model answer</div>' +
+      '<div class="feedback-body">' + escapeHtml(q.model_answer || '(no model answer provided)') + '</div>' +
+    '</div>' +
+    '<div class="open-self-grade">' +
+      '<div class="open-self-grade-label">How did you do?</div>' +
+      '<button type="button" class="self-grade-btn self-grade-full" data-marks="' + maxMarks + '">Got it right (' + maxMarks + '/' + maxMarks + ')</button>' +
+      (maxMarks >= 2 ? '<button type="button" class="self-grade-btn self-grade-partial" data-marks="' + Math.ceil(maxMarks / 2) + '">Partly right (' + Math.ceil(maxMarks / 2) + '/' + maxMarks + ')</button>' : '') +
+      '<button type="button" class="self-grade-btn self-grade-none" data-marks="0">Missed it (0/' + maxMarks + ')</button>' +
+    '</div>';
+  var btns = feedback.querySelectorAll('.self-grade-btn');
+  btns.forEach(function(b) {
+    b.onclick = function() {
+      var marks = parseInt(b.dataset.marks, 10) || 0;
+      btns.forEach(function(x) { x.disabled = true; });
+      b.classList.add('selected');
+      var fakeData = {
+        score: marks,
+        max: maxMarks,
+        what_went_well: marks === maxMarks ? 'You said you got it right — well done!' : '',
+        what_was_missing: marks < maxMarks ? 'Compare your answer with the model answer above.' : '',
+        suggested_phrasing: q.model_answer || ''
+      };
+      recordOpenResult(q, studentAnswer, marks, maxMarks, fakeData);
+      appendOpenNextButton();
+    };
+  });
+}
+
+function recordOpenResult(q, studentAnswer, awardedScore, max, data) {
+  var pct = max > 0 ? (awardedScore / max) : 0;
+  // Add fractional credit toward total score.
+  score += pct;
+  openMarksAwarded += awardedScore;
+  openMarksMax += max;
+  document.getElementById('scoreDisplay').textContent = formatScore(score) + ' / ' + currentQuestions.length;
+
+  // In review mode, remove perfectly answered questions from wrong bank.
+  if (isReviewMode && pct >= 0.999) {
+    QuizStorage.removeFromWrongBank(q.q);
+  }
+
+  // Push to wrong list if not perfect, with extended fields for review.
+  if (pct < 0.999) {
+    wrongAnswers.push({
+      question: q.q,
+      yourAnswer: studentAnswer,
+      correctAnswer: q.model_answer || '',
+      explain: (data && data.what_was_missing) ? data.what_was_missing : (q.model_answer || ''),
+      type: 'open',
+      studentAnswer: studentAnswer,
+      modelAnswer: q.model_answer || '',
+      feedback: {
+        score: awardedScore,
+        max: max,
+        what_went_well: (data && data.what_went_well) || '',
+        what_was_missing: (data && data.what_was_missing) || '',
+        suggested_phrasing: (data && data.suggested_phrasing) || ''
+      },
+      maxMarks: max
+    });
+  }
+}
+
+function appendOpenNextButton() {
+  if (document.getElementById('openNextBtn')) return;
+  var card = document.querySelector('#quizScreen .question-card');
+  var btn = document.createElement('button');
+  btn.id = 'openNextBtn';
+  btn.className = 'open-next-btn';
+  btn.type = 'button';
+  btn.textContent = (currentIndex + 1 < currentQuestions.length) ? 'Next Question →' : 'See Results →';
+  btn.onclick = function() { nextQuestion(); };
+  card.appendChild(btn);
+  setTimeout(function() { btn.focus(); }, 50);
+}
+
 function pickAnswer(el, idx) {
   if (answered) return;
   answered = true;
@@ -401,7 +648,7 @@ function pickAnswer(el, idx) {
       el.classList.add('wrong');
       wrongAnswers.push({ question: q.q, yourAnswer: q.opts[idx], correctAnswer: q.opts[q.ans], explain: q.explain });
     }
-    document.getElementById('scoreDisplay').textContent = score + ' / ' + currentQuestions.length;
+    document.getElementById('scoreDisplay').textContent = formatScore(score) + ' / ' + currentQuestions.length;
     tb.style.display = 'none';
   }
   document.getElementById('explanation').textContent = q.explain;
@@ -420,13 +667,14 @@ function showResults() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
   // Record result and get XP info (skip recording for practice/review modes)
+  var openMarks = openMarksMax > 0 ? { awarded: openMarksAwarded, max: openMarksMax } : null;
   var result;
   if (isPracticeMode || isReviewMode) {
     result = { xpGained: 0, newBadges: [], level: 0, streak: 0 };
   } else {
     result = QuizStorage.recordQuizResult(
       currentSubject, currentTheme, currentTopic,
-      currentQuestions.length, score, wrongAnswers
+      currentQuestions.length, score, wrongAnswers, openMarks
     );
   }
 
@@ -439,7 +687,7 @@ function showResults() {
     pct = Math.round((score / currentQuestions.length) * 100);
   } else {
     pct = Math.round((score / currentQuestions.length) * 100);
-    document.getElementById('finalScore').innerHTML = score + ' <span>/ ' + currentQuestions.length + ' (' + pct + '%)</span>';
+    document.getElementById('finalScore').innerHTML = formatScore(score) + ' <span>/ ' + currentQuestions.length + ' (' + pct + '%)</span>';
   }
   if (pct >= 90) { g.textContent = 'Excellent!'; g.className = 'grade gold'; }
   else if (pct >= 70) { g.textContent = 'Good Job!'; g.className = 'grade silver'; }
@@ -483,12 +731,22 @@ function showResults() {
   if (wrongAnswers.length === 0) {
     wl.innerHTML = '<p style="color:#38a169;font-weight:600;margin-top:12px;">Perfect! Every answer correct!</p>';
   } else {
-    var h = '<h3>Review These (' + wrongAnswers.length + ' wrong):</h3>';
+    var h = '<h3>Review These (' + wrongAnswers.length + '):</h3>';
     wrongAnswers.forEach(function(w, i) {
-      h += '<div class="wrong-item"><div class="wi-q">' + (i + 1) + '. ' + w.question + '</div>';
-      h += '<div style="color:#e53e3e;">You picked: ' + w.yourAnswer + '</div>';
-      h += '<div class="wi-a">Answer: ' + w.correctAnswer + '</div>';
-      h += '<div style="color:#666;font-size:13px;margin-top:4px;">' + w.explain + '</div></div>';
+      h += '<div class="wrong-item"><div class="wi-q">' + (i + 1) + '. ' + escapeHtml(w.question) + '</div>';
+      if (w.type === 'open') {
+        var fb = w.feedback || {};
+        h += '<div class="wi-open-score">Score: ' + formatScore(fb.score || 0) + ' / ' + (fb.max || w.maxMarks || 0) + '</div>';
+        h += '<div class="wi-open-row"><span class="wi-open-label">Your answer:</span> ' + escapeHtml(w.studentAnswer || '') + '</div>';
+        if (fb.what_went_well) h += '<div class="wi-open-row wi-open-good"><span class="wi-open-label">What went well:</span> ' + escapeHtml(fb.what_went_well) + '</div>';
+        if (fb.what_was_missing) h += '<div class="wi-open-row wi-open-missing"><span class="wi-open-label">What was missing:</span> ' + escapeHtml(fb.what_was_missing) + '</div>';
+        if (w.modelAnswer) h += '<div class="wi-a">Model answer: ' + escapeHtml(w.modelAnswer) + '</div>';
+      } else {
+        h += '<div style="color:#e53e3e;">You picked: ' + escapeHtml(w.yourAnswer) + '</div>';
+        h += '<div class="wi-a">Answer: ' + escapeHtml(w.correctAnswer) + '</div>';
+        h += '<div style="color:#666;font-size:13px;margin-top:4px;">' + escapeHtml(w.explain) + '</div>';
+      }
+      h += '</div>';
     });
     wl.innerHTML = h;
   }
@@ -714,18 +972,21 @@ function showProgress() {
 function goDashboard() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
+  removeOpenQuestionUI();
   renderDashboard();
 }
 
 function goHome() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
+  removeOpenQuestionUI();
   selectTheme(currentTheme);
 }
 
 function goThemes() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
+  removeOpenQuestionUI();
   selectSubject(currentSubject);
 }
 

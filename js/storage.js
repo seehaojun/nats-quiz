@@ -176,7 +176,7 @@ function addDailyCount(data, count) {
 
 // ── Record quiz result ──
 
-function recordQuizResult(subject, theme, topic, totalQs, correctQs, wrongList) {
+function recordQuizResult(subject, theme, topic, totalQs, correctQs, wrongList, openMarks) {
   var data = getData();
   var key = subject + '/' + theme + '/' + topic;
   var pct = Math.round((correctQs / totalQs) * 100);
@@ -189,14 +189,15 @@ function recordQuizResult(subject, theme, topic, totalQs, correctQs, wrongList) 
   data.scores[key].lastDate = today();
   if (pct > data.scores[key].best) data.scores[key].best = pct;
 
-  // Update totals
+  // Update totals (round so the integer counters don't drift on fractional open-Q scores).
   data.totalAnswered += totalQs;
-  data.totalCorrect += correctQs;
+  data.totalCorrect += Math.round(correctQs);
 
-  // XP
+  // XP — works with fractional `correctQs` (open-Q topics contribute partial credit).
   var xpGained = (correctQs * XP_PER_CORRECT) + ((totalQs - correctQs) * XP_PER_WRONG);
   if (pct === 100) xpGained += 20; // perfect bonus
   xpGained += Math.min(data.streak, 10) * XP_STREAK_BONUS; // streak bonus capped at 10 days
+  xpGained = Math.round(xpGained);
   data.xp += xpGained;
   data.level = calcLevel(data.xp);
 
@@ -214,7 +215,7 @@ function recordQuizResult(subject, theme, topic, totalQs, correctQs, wrongList) 
         return existing.q === w.question;
       });
       if (!exists) {
-        data.wrongBank.push({
+        var entry = {
           subject: subject,
           theme: theme,
           q: w.question,
@@ -222,7 +223,15 @@ function recordQuizResult(subject, theme, topic, totalQs, correctQs, wrongList) 
           correctAnswer: w.correctAnswer,
           explain: w.explain,
           addedDate: today()
-        });
+        };
+        if (w.type === 'open') {
+          entry.type = 'open';
+          entry.studentAnswer = w.studentAnswer;
+          entry.modelAnswer = w.modelAnswer;
+          entry.feedback = w.feedback;
+          entry.maxMarks = w.maxMarks;
+        }
+        data.wrongBank.push(entry);
       }
     });
     // Keep wrong bank manageable

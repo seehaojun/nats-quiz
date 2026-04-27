@@ -116,6 +116,7 @@ var QuizLoader = {
       else if (key === 'plantsys') names[key] = 'Plant Parts & Functions';
       else if (key === 'hard') names[key] = 'Hard Questions';
       else if (key === 'compare') names[key] = 'Comparison Questions';
+      else if (key === 'open') names[key] = 'Open-Ended Questions';
       else if (key === 'spelling') names[key] = 'Spelling Errors';
       else if (key === 'punctuation') names[key] = 'Punctuation Errors';
       else if (key === 'grammar_edit') names[key] = 'Grammar Errors';
