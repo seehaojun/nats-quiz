@@ -5,11 +5,8 @@ window.QUIZ_DATA.magnets = {
 ch1: [
   { q: "What is a magnet?", opts: ["An object that can attract magnetic materials", "An object that can attract all materials", "A type of metal", "A type of rock"], ans: 0, explain: "A magnet is an object that can attract materials made of iron, steel, nickel or cobalt." },
   { q: "Which of the following is a magnetic material?", opts: ["Iron", "Wood", "Plastic", "Glass"], ans: 0, explain: "Iron is a magnetic material. It is attracted to magnets." },
-  { q: "Which of the following is a magnetic material?", opts: ["Steel", "Rubber", "Paper", "Cotton"], ans: 0, explain: "Steel is a magnetic material because it contains iron." },
   { q: "Which of the following is a magnetic material?", opts: ["Nickel", "Aluminium", "Copper", "Gold"], ans: 0, explain: "Nickel is one of the magnetic materials. It is attracted to magnets." },
-  { q: "Which of the following is a magnetic material?", opts: ["Cobalt", "Silver", "Tin", "Zinc"], ans: 0, explain: "Cobalt is a magnetic material. It is attracted to magnets." },
   { q: "Which of the following is NOT a magnetic material?", opts: ["Copper", "Iron", "Steel", "Nickel"], ans: 0, explain: "Copper is not a magnetic material. It is not attracted to magnets." },
-  { q: "Which of the following is NOT a magnetic material?", opts: ["Aluminium", "Iron", "Cobalt", "Steel"], ans: 0, explain: "Aluminium is not a magnetic material even though it is a metal." },
   { q: "Are all metals magnetic?", opts: ["No, only some metals are magnetic", "Yes, all metals are magnetic", "No metals are magnetic", "Only gold is magnetic"], ans: 0, explain: "Not all metals are magnetic. Only iron, steel, nickel and cobalt are magnetic." },
   { q: "A magnet is brought near a paper clip. What happens?", opts: ["The paper clip is attracted to the magnet", "The paper clip is repelled", "Nothing happens", "The paper clip melts"], ans: 0, explain: "Paper clips are made of steel, which is a magnetic material. The paper clip is attracted to the magnet." },
   { q: "A magnet is brought near a wooden block. What happens?", opts: ["Nothing happens", "The block is attracted", "The block is repelled", "The block becomes a magnet"], ans: 0, explain: "Wood is not a magnetic material, so the magnet has no effect on it." },
@@ -26,12 +23,10 @@ ch1: [
 ],
 
 ch2: [
-  { q: "How many poles does a magnet have?", opts: ["Two", "One", "Three", "Four"], ans: 0, explain: "Every magnet has two poles: a north pole (N) and a south pole (S)." },
-  { q: "What are the two poles of a magnet called?", opts: ["North pole and south pole", "Top pole and bottom pole", "Left pole and right pole", "Hot pole and cold pole"], ans: 0, explain: "The two poles of a magnet are called the north pole (N) and the south pole (S)." },
+  { q: "What are the two poles of a magnet called?", opts: ["North pole and south pole", "Top pole and bottom pole", "Left pole and right pole", "Hot pole and cold pole"], ans: 0, explain: "Every magnet has two poles, called the north pole (N) and the south pole (S)." },
   { q: "Where is the magnetic force of a magnet the strongest?", opts: ["At the poles", "In the middle", "On the sides", "At the back"], ans: 0, explain: "The magnetic force is strongest at the two poles of the magnet." },
   { q: "What happens when two north poles are brought together?", opts: ["They repel each other", "They attract each other", "Nothing happens", "They stick together"], ans: 0, explain: "Like poles repel. Two north poles push away from each other." },
   { q: "What happens when a north pole and a south pole are brought together?", opts: ["They attract each other", "They repel each other", "Nothing happens", "They break"], ans: 0, explain: "Unlike poles attract. A north pole and a south pole pull towards each other." },
-  { q: "What happens when two south poles are brought together?", opts: ["They repel each other", "They attract each other", "They join together", "One becomes a north pole"], ans: 0, explain: "Like poles repel. Two south poles push away from each other." },
   { q: "Like poles ___ and unlike poles ___.", opts: ["Repel, attract", "Attract, repel", "Attract, attract", "Repel, repel"], ans: 0, explain: "Like poles (N-N or S-S) repel each other. Unlike poles (N-S) attract each other." },
   { q: "A bar magnet is hung freely on a string. Which direction does the north pole point?", opts: ["North", "South", "East", "West"], ans: 0, explain: "A freely hanging magnet aligns itself with the Earth's magnetic field. Its north pole points north." },
   { q: "How does a compass work?", opts: ["The magnetic needle points to the north", "It uses batteries", "It reads the sun's position", "It uses a clock"], ans: 0, explain: "A compass has a small magnetic needle that always points north because of Earth's magnetic field." },
