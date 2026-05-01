@@ -134,8 +134,16 @@ var QuizLoader = {
       names.ch3 = 'Chapter 3: Plants';
     }
     if (themeId === 'matter') {
-      names.ch1 = 'Chapter 1: States of Matter';
-      names.ch2 = 'Chapter 2: Changes of State';
+      names.ch1 = 'Ch 8: What Is Matter?';
+      names.ch2 = 'Ch 8: Air As Matter';
+      names.ch3 = 'Ch 8: Three States Of Matter';
+    }
+    if (themeId === 'systems') {
+      names.ch1 = 'Ch 9: What Is A System?';
+      names.ch2 = 'Ch 10: The Digestive System';
+      names.ch3 = 'Ch 11: Respiratory & Circulatory Systems';
+      names.ch4 = 'Plant Transport System';
+      names.ch5 = 'Electrical Circuits';
     }
     if (themeId === 'magnets') {
       names.ch1 = 'Chapter 1: Properties of Magnets';
