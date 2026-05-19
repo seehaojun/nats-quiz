@@ -3,89 +3,90 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nat's Quiz - P4</title>
+<meta name="description" content="Nat's Quiz — interactive Singapore P4 quiz app covering Science, English, Math, and Chinese.">
+<meta name="theme-color" content="#5b6cff">
+<title>Nat's Quiz — P4</title>
 <link rel="stylesheet" href="css/styles.css">
-<link rel="stylesheet" href="css/dark.css">
 </head>
 <body>
-<div class="app">
+<main class="app" id="app">
 
 <!-- Dashboard / Home -->
-<div class="screen" id="dashboardScreen" style="position:relative">
-  <button class="theme-toggle" id="themeToggle" onclick="QuizApp.toggleDarkMode()" title="Toggle dark mode">&#9790;</button>
-  <h1>Nat's Quiz</h1>
-  <div class="dashboard-stats" id="dashStats"></div>
-  <div class="daily-progress" id="dailyProgress"></div>
+<section class="screen" id="dashboardScreen" style="position:relative" aria-labelledby="dashboardTitle">
+  <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">&#9790;</button>
+  <h1 id="dashboardTitle">Nat's Quiz</h1>
+  <div class="dashboard-stats" id="dashStats" aria-label="Your stats"></div>
+  <div class="daily-progress" id="dailyProgress" aria-label="Today's progress"></div>
   <div class="dashboard-actions" id="dashboardActions"></div>
   <h2 class="section-title">Choose a Subject</h2>
-  <div class="subject-grid" id="subjectGrid"></div>
+  <div class="subject-grid" id="subjectGrid" role="list"></div>
   <div class="badges-section" id="badgesSection"></div>
-</div>
+</section>
 
 <!-- Theme Selection -->
-<div class="screen" id="themeScreen" style="display:none">
-  <button class="back-btn" onclick="QuizApp.goDashboard()">&larr; All Subjects</button>
+<section class="screen" id="themeScreen" style="display:none" aria-labelledby="themeScreenTitle">
+  <button class="back-btn" id="backToDashboard" type="button">&larr; All Subjects</button>
   <h1 id="themeScreenTitle">Science</h1>
   <p id="themeScreenDesc">Pick a theme to start</p>
-  <div class="theme-grid" id="themeGrid"></div>
-</div>
+  <div class="theme-grid" id="themeGrid" role="list"></div>
+</section>
 
 <!-- Topic Selection -->
-<div class="screen" id="homeScreen" style="display:none">
-  <button class="back-btn" onclick="QuizApp.goThemes()">&larr; All Themes</button>
+<section class="screen" id="homeScreen" style="display:none" aria-labelledby="homeTitle">
+  <button class="back-btn" id="backToThemes" type="button">&larr; All Themes</button>
   <h1 id="homeTitle">Diversity</h1>
   <p id="homeSubtitle">Pick a topic</p>
   <div id="topicButtons"></div>
-</div>
+</section>
 
 <!-- Quiz -->
-<div class="screen" id="quizScreen" style="display:none">
-  <button class="back-btn" onclick="QuizApp.goHome()">&larr; Back</button>
+<section class="screen" id="quizScreen" style="display:none" aria-labelledby="topicTitle" aria-live="polite">
+  <button class="back-btn" id="backToTopics" type="button">&larr; Back</button>
   <div class="quiz-header">
     <h2 id="topicTitle"></h2>
-    <div class="score-display" id="scoreDisplay">0 / 0</div>
+    <div class="score-display" id="scoreDisplay" aria-label="Current score">0 / 0</div>
   </div>
-  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-  <div class="timer-text" id="timerText"></div>
+  <div class="progress-bar" role="progressbar" aria-label="Quiz progress" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="timer-text" id="timerText" aria-live="off"></div>
   <div class="timer-bar" id="timerBar"><div class="timer-fill" id="timerFill"></div></div>
   <div class="hard-score-display" id="hardScoreDisplay"></div>
   <div class="question-card">
     <div class="q-number" id="qNumber"></div>
     <div class="q-text" id="qText"></div>
-    <ul class="options" id="optionsList"></ul>
-    <div class="explanation" id="explanation"></div>
-    <div class="time-bonus" id="timeBonus"></div>
+    <ul class="options" id="optionsList" role="listbox" aria-label="Answer options"></ul>
+    <div class="explanation" id="explanation" role="status" aria-live="polite"></div>
+    <div class="time-bonus" id="timeBonus" aria-live="polite"></div>
   </div>
-</div>
+</section>
 
 <!-- Results -->
-<div class="screen" id="resultsScreen" style="display:none">
+<section class="screen" id="resultsScreen" style="display:none" aria-labelledby="resultsTitle">
   <div class="results-card">
-    <h2>Quiz Done!</h2>
+    <h2 id="resultsTitle">Quiz Done!</h2>
     <div class="xp-gained" id="xpGained"></div>
     <div class="big-score"><span id="finalScore"></span></div>
     <div class="grade" id="gradeLabel"></div>
     <div class="new-badges" id="newBadges"></div>
     <div class="wrong-list" id="wrongList"></div>
   </div>
-  <button class="restart-btn practice-wrong-btn" id="practiceWrongBtn" onclick="QuizApp.practiceWrongAnswers()" style="display:none">Practice Wrong Answers</button>
-  <button class="restart-btn" onclick="QuizApp.startQuiz(window._lastTopic)">Try Again</button>
-  <button class="restart-btn home-btn" onclick="QuizApp.goHome()">Pick Another Topic</button>
-  <button class="restart-btn home-btn" onclick="QuizApp.goDashboard()">Home</button>
-</div>
+  <button class="restart-btn practice-wrong-btn" id="practiceWrongBtn" type="button" style="display:none">Practice Wrong Answers</button>
+  <button class="restart-btn" id="tryAgainBtn" type="button">Try Again</button>
+  <button class="restart-btn home-btn" id="pickAnotherBtn" type="button">Pick Another Topic</button>
+  <button class="restart-btn home-btn" id="resultsHomeBtn" type="button">Home</button>
+</section>
 
 <!-- Progress Dashboard -->
-<div class="screen" id="progressScreen" style="display:none">
-  <button class="back-btn" onclick="QuizApp.goDashboard()">&larr; Back to Home</button>
-  <h1>Progress</h1>
+<section class="screen" id="progressScreen" style="display:none" aria-labelledby="progressTitle">
+  <button class="back-btn" id="backFromProgress" type="button">&larr; Back to Home</button>
+  <h1 id="progressTitle">Progress</h1>
   <div id="progressOverall" class="progress-overall"></div>
   <div id="progressSubjects"></div>
-</div>
+</section>
 
 <!-- Badge notification toast -->
-<div class="badge-toast" id="badgeToast"></div>
+<div class="badge-toast" id="badgeToast" role="status" aria-live="polite"></div>
 
-</div>
+</main>
 
 <!-- Data files — Science -->
 <script src="data/diversity.js"></script>

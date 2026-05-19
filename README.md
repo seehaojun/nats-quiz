@@ -1,20 +1,33 @@
 # Nat's Quiz
 
-Interactive P4 quiz app covering Science, English, Math and Chinese for Primary 4 students.
+Interactive quiz app for Singapore Primary 4 students, covering all four core subjects: Science, English, Math, and Chinese — plus Claude-graded open-ended questions.
 
 ## Features
 
-- Multiple quiz topics across each subject — full chapter MCQ banks plus shared "Tricky", "Hard" and "Comparison" challenge sets
-- Open-ended (short-answer) questions graded by Claude with structured feedback
-- Instant feedback with explanations for each answer
-- Score tracking with progress bar, XP, levels and badges
-- Review mode to revisit questions you got wrong
-- Play individual topics or all questions combined
+- **4 subjects, 27+ themes, 1,700+ questions** aligned to the MOE P4 syllabus
+- **Multiple modes**
+  - Standard practice (10–40 questions per topic)
+  - Hard / Timed Challenge (30s per question with a speed bonus)
+  - Practice Wrong Answers (drills the questions you just missed)
+  - Review Mode (spaced re-quizzing of your accumulated wrong-answer bank)
+- **Open-Ended Questions** for Science — long-form answers graded by Claude with structured feedback (what went well / missing / a model answer). Falls back to manual self-grade when the grader is unreachable.
+- **Motivation system**: XP, 16 levels, daily streaks, daily goal, 12 badges
+- **Progress dashboard** with per-subject / per-theme breakdowns and a 7-day streak view
+- **Dark mode** with system-preference detection
+- **Keyboard shortcuts**: press `1`–`4` (or `A`–`D`) to pick an answer
+- **Accessible**: ARIA labels, focus-visible outlines, `prefers-reduced-motion` support
+- All progress saved to `localStorage` — survives browser restarts
 
 ## Architecture
 
-- **Static frontend** at the repo root (`index.html`, `css/`, `js/`, `data/`) — no build step.
-- **Serverless grader** at `api/grade.js` — calls Claude to score open-ended answers. Lives in the same Vercel project so the Anthropic API key never ships to the browser.
+- **Static frontend** at the repo root — zero dependencies, no build step
+  - `index.html` — markup + script tags
+  - `css/styles.css` — single stylesheet (light + dark themes via CSS variables)
+  - `js/storage.js` — persistence + XP / streak / badges
+  - `js/data-loader.js` — subject/theme registry + runtime question-schema validation
+  - `js/app.js` — quiz engine, navigation, rendering
+  - `data/*.js` — question banks, one per theme
+- **Serverless grader** at `api/grade.js` — calls Claude to score open-ended answers. Same Vercel project, so the Anthropic API key never ships to the browser.
 
 ## Local development
 
@@ -65,15 +78,31 @@ vercel env add ALLOWED_ORIGIN production
 vercel --prod
 ```
 
-## Open-ended questions
+## Question format
 
-Questions of the form
+Each question file attaches to `window.QUIZ_DATA[themeName]`:
+
+```js
+window.QUIZ_DATA.diversity = {
+  ch1: [
+    { q: "Question text?", opts: ["A", "B", "C", "D"], ans: 0, explain: "Why A is correct." },
+    // ...
+  ],
+  ch2: [ /* ... */ ],
+  tricky: [ /* harder mixed questions */ ],
+  hard: [ /* timed challenge questions */ ],
+};
+```
+
+The correct answer is always at index `0` in the source data; the engine shuffles options at runtime.
+
+### Open-ended questions
 
 ```js
 { type: "open", q, model_answer, rubric, max_marks }
 ```
 
-are rendered as a textarea. On submit, the student's answer is POSTed to
+Rendered as a textarea. On submit, the student's answer is POSTed to
 `/api/grade` with the model answer and rubric. Claude returns structured JSON:
 
 ```json
