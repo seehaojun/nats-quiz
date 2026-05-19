@@ -87,7 +87,7 @@ tricky: [
   // TRICKY — 15 questions
   { q: "She ___ her homework before she went out to play.", opts: ["had finished", "has finished", "finishes", "is finishing"], ans: 0, explain: "The past perfect ('had finished') is used for an action completed before another past action." },
   { q: "The news ___ shocking to everyone.", opts: ["was", "were", "are", "have been"], ans: 0, explain: "'News' is an uncountable noun and is always singular, so we use 'was'." },
-  { q: "Neither my brother nor I ___ able to solve the puzzle.", opts: ["was", "were", "am", "is"], ans: 0, explain: "With 'neither...nor', the verb agrees with the nearer subject. 'I' takes 'was' in this formal usage." },
+  { q: "Neither my brother nor my sister ___ able to solve the puzzle.", opts: ["was", "were", "are", "have been"], ans: 0, explain: "With 'neither...nor', the verb agrees with the nearer subject. 'My sister' is singular, so we use 'was'." },
   { q: "If it ___ tomorrow, we will cancel the picnic.", opts: ["rains", "rain", "rained", "will rain"], ans: 0, explain: "In first conditional sentences, we use simple present tense in the 'if' clause." },
   { q: "She asked me where I ___.", opts: ["lived", "live", "living", "lives"], ans: 0, explain: "In reported questions, the verb shifts to past tense: 'live' becomes 'lived'." },
   { q: "The pair of scissors ___ on the table.", opts: ["is", "are", "were", "have been"], ans: 0, explain: "'A pair of scissors' is treated as singular, so we use 'is'." },

@@ -1,216 +1,263 @@
 // Nat's Quiz — P4 Quiz Engine with motivation system
-(function() {
+(() => {
 
-var currentSubject = '';
-var currentTheme = '';
-var currentTopic = '';
-var currentQuestions = [];
-var currentIndex = 0;
-var score = 0;
-var answered = false;
-var wrongAnswers = [];
-var isHardMode = false;
-var hardScore = 0;
-var timerInterval = null;
-var timerStart = 0;
-var autoAdvanceTimer = null;
-var HARD_TIME_LIMIT = 30;
-var AUTO_ADVANCE_DELAY = 1000;
-var isPracticeMode = false;
-var isReviewMode = false;
+const CONFIG = {
+  HARD_TIME_LIMIT: 30,
+  AUTO_ADVANCE_DELAY: 1000,
+  REVIEW_BATCH_SIZE: 20,
+  OPTION_KEYS: ['A', 'B', 'C', 'D'],
+  // Same-origin: the grader is deployed alongside the static site on Vercel.
+  // localStorage override is still useful for opening index.html via file://
+  // (where relative URLs can't resolve) or pointing at a staging deployment.
+  DEFAULT_GRADER_URL: '/api/grade',
+};
 
-// Open-ended question state
-var openMarksAwarded = 0;
-var openMarksMax = 0;
-// Same-origin: the grader is deployed alongside the static site on Vercel.
-// localStorage override is still useful for opening index.html via file://
-// (where relative URLs can't resolve) or pointing at a staging deployment.
-var DEFAULT_GRADER_URL = '/api/grade';
+const state = {
+  currentSubject: '',
+  currentTheme: '',
+  currentTopic: '',
+  currentQuestions: [],
+  currentIndex: 0,
+  score: 0,
+  answered: false,
+  wrongAnswers: [],
+  isHardMode: false,
+  hardScore: 0,
+  timerInterval: null,
+  timerStart: 0,
+  autoAdvanceTimer: null,
+  isPracticeMode: false,
+  isReviewMode: false,
+  lastTopic: null,
+  openMarksAwarded: 0,
+  openMarksMax: 0,
+};
+
+const $ = id => document.getElementById(id);
+
 function getGraderUrl() {
   try {
-    var override = localStorage.getItem('natsquiz-grader-url');
+    const override = localStorage.getItem('natsquiz-grader-url');
     if (override) return override;
-  } catch(e) {}
-  return DEFAULT_GRADER_URL;
+  } catch (e) {}
+  return CONFIG.DEFAULT_GRADER_URL;
+}
+
+// Format fractional scores nicely (whole number when possible, else 1 decimal).
+function formatScore(s) {
+  return Math.abs(s - Math.round(s)) < 0.001 ? String(Math.round(s)) : s.toFixed(1);
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
 }
 
 // ── Screens ──
 
 function showScreen(id) {
-  var screens = document.querySelectorAll('.screen');
-  for (var i = 0; i < screens.length; i++) screens[i].style.display = 'none';
-  document.getElementById(id).style.display = 'block';
+  document.querySelectorAll('.screen').forEach(s => { s.style.display = 'none'; });
+  $(id).style.display = 'block';
+  window.scrollTo(0, 0);
+}
+
+function clearTimers() {
+  if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
+  if (state.autoAdvanceTimer) { clearTimeout(state.autoAdvanceTimer); state.autoAdvanceTimer = null; }
 }
 
 // ── Dashboard ──
 
 function renderDashboard() {
   showScreen('dashboardScreen');
-  var data = QuizStorage.getData();
+  const data = QuizStorage.getData();
 
   // Stats bar
-  var statsEl = document.getElementById('dashStats');
-  var levelTitle = QuizStorage.getLevelTitle(data.level);
-  var nextXp = QuizStorage.xpForLevel(data.level + 1);
-  var currXp = QuizStorage.xpForLevel(data.level);
-  var progressPct = nextXp > currXp ? Math.min(100, Math.round((data.xp - currXp) / (nextXp - currXp) * 100)) : 100;
+  const levelTitle = QuizStorage.getLevelTitle(data.level);
+  const nextXp = QuizStorage.xpForLevel(data.level + 1);
+  const currXp = QuizStorage.xpForLevel(data.level);
+  const progressPct = nextXp > currXp
+    ? Math.min(100, Math.round((data.xp - currXp) / (nextXp - currXp) * 100))
+    : 100;
+  const accuracy = data.totalAnswered > 0
+    ? Math.round(data.totalCorrect / data.totalAnswered * 100) + '% correct'
+    : 'Start quizzing!';
 
-  statsEl.innerHTML =
-    '<div class="stat-row">' +
-      '<div class="stat-box">' +
-        '<div class="stat-value">' + data.level + '</div>' +
-        '<div class="stat-label">' + levelTitle + '</div>' +
-        '<div class="xp-bar"><div class="xp-fill" style="width:' + progressPct + '%"></div></div>' +
-        '<div class="stat-sub">' + data.xp + ' / ' + nextXp + ' XP</div>' +
-      '</div>' +
-      '<div class="stat-box">' +
-        '<div class="stat-value">' + (data.streak > 0 ? data.streak : '0') + '</div>' +
-        '<div class="stat-label">' + (data.streak === 1 ? 'Day Streak' : 'Day Streak') + '</div>' +
-        '<div class="stat-sub">' + (data.streak >= 3 ? '🔥' : '') + '</div>' +
-      '</div>' +
-      '<div class="stat-box">' +
-        '<div class="stat-value">' + data.totalAnswered + '</div>' +
-        '<div class="stat-label">Questions Done</div>' +
-        '<div class="stat-sub">' + (data.totalAnswered > 0 ? Math.round(data.totalCorrect / data.totalAnswered * 100) + '% correct' : 'Start quizzing!') + '</div>' +
-      '</div>' +
-    '</div>';
+  $('dashStats').innerHTML = `
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-value">${data.level}</div>
+        <div class="stat-label">${levelTitle}</div>
+        <div class="xp-bar"><div class="xp-fill" style="width:${progressPct}%"></div></div>
+        <div class="stat-sub">${data.xp} / ${nextXp} XP</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">${data.streak || 0}</div>
+        <div class="stat-label">Day Streak</div>
+        <div class="stat-sub">${data.streak >= 3 ? '🔥' : ''}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">${data.totalAnswered}</div>
+        <div class="stat-label">Questions Done</div>
+        <div class="stat-sub">${accuracy}</div>
+      </div>
+    </div>`;
 
   // Daily progress
-  var dailyEl = document.getElementById('dailyProgress');
-  var dailyDone = QuizStorage.getDailyProgress(data);
-  var dailyTarget = data.dailyTarget;
-  var dailyPct = Math.min(100, Math.round(dailyDone / dailyTarget * 100));
-  dailyEl.innerHTML =
-    '<div class="daily-bar-label">' +
-      '<span>Today\'s Goal: ' + dailyDone + ' / ' + dailyTarget + ' questions</span>' +
-      (dailyDone >= dailyTarget ? '<span class="daily-done">Done!</span>' : '') +
-    '</div>' +
-    '<div class="daily-bar"><div class="daily-fill" style="width:' + dailyPct + '%"></div></div>';
+  const dailyDone = QuizStorage.getDailyProgress(data);
+  const dailyTarget = data.dailyTarget;
+  const dailyPct = Math.min(100, Math.round(dailyDone / dailyTarget * 100));
+  $('dailyProgress').innerHTML = `
+    <div class="daily-bar-label">
+      <span>Today's Goal: ${dailyDone} / ${dailyTarget} questions</span>
+      ${dailyDone >= dailyTarget ? '<span class="daily-done">Done!</span>' : ''}
+    </div>
+    <div class="daily-bar"><div class="daily-fill" style="width:${dailyPct}%"></div></div>`;
 
   // Dashboard action buttons
-  var actionsEl = document.getElementById('dashboardActions');
-  var actionsHtml = '';
-  var wrongBankCount = (data.wrongBank || []).length;
+  const actionsEl = $('dashboardActions');
+  const wrongBankCount = (data.wrongBank || []).length;
+  let actionsHtml = '';
   if (wrongBankCount > 0) {
-    actionsHtml += '<button class="dash-action-btn review-btn" onclick="QuizApp.startReviewMode()">' +
-      'Review Wrong Answers <span class="review-count">' + wrongBankCount + '</span></button>';
+    actionsHtml += `<button class="dash-action-btn review-btn" type="button" data-action="review">
+      Review Wrong Answers <span class="review-count">${wrongBankCount}</span></button>`;
   }
-  actionsHtml += '<button class="dash-action-btn progress-btn" onclick="QuizApp.showProgress()">Progress</button>';
+  actionsHtml += '<button class="dash-action-btn progress-btn" type="button" data-action="progress">Progress</button>';
   actionsEl.innerHTML = actionsHtml;
+  actionsEl.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.action === 'review') startReviewMode();
+      else if (btn.dataset.action === 'progress') showProgress();
+    });
+  });
 
   // Subject grid
-  var grid = document.getElementById('subjectGrid');
+  const grid = $('subjectGrid');
   grid.innerHTML = '';
-  var subjects = QuizLoader.subjects;
-  for (var id in subjects) {
-    if (!subjects.hasOwnProperty(id)) continue;
-    var s = subjects[id];
-    var count = QuizLoader.getSubjectQuestionCount(id);
-    var themes = QuizLoader.getThemesForSubject(id);
-    var hasContent = themes.some(function(t) { return t.loaded; });
+  for (const id in QuizLoader.subjects) {
+    const s = QuizLoader.subjects[id];
+    const count = QuizLoader.getSubjectQuestionCount(id);
+    const themes = QuizLoader.getThemesForSubject(id);
+    const hasContent = themes.some(t => t.loaded);
 
-    var card = document.createElement('div');
+    const card = document.createElement('div');
     card.className = 'subject-card' + (hasContent ? '' : ' disabled');
+    card.setAttribute('role', 'listitem');
     card.style.borderColor = s.color;
     if (hasContent) {
-      card.onclick = (function(sid) { return function() { selectSubject(sid); }; })(id);
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', `${s.name}, ${count} questions`);
+      const select = () => selectSubject(id);
+      card.addEventListener('click', select);
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); }
+      });
     }
-    card.innerHTML =
-      '<div class="subject-icon">' + s.icon + '</div>' +
-      '<div class="subject-name" style="color:' + s.color + '">' + s.name + '</div>' +
-      '<div class="subject-count">' + (hasContent ? count + ' questions' : 'Coming soon') + '</div>';
+    card.innerHTML = `
+      <div class="subject-icon" aria-hidden="true">${s.icon}</div>
+      <div class="subject-name" style="color:${s.color}">${s.name}</div>
+      <div class="subject-count">${hasContent ? count + ' questions' : 'Coming soon'}</div>`;
     grid.appendChild(card);
   }
 
-  // Badges
   renderBadges(data);
 }
 
 function renderBadges(data) {
-  var section = document.getElementById('badgesSection');
-  var earned = data.badges || [];
+  const section = $('badgesSection');
+  const earned = data.badges || [];
   if (earned.length === 0 && data.totalAnswered === 0) {
     section.innerHTML = '';
     return;
   }
 
-  var html = '<h2 class="section-title">Badges</h2><div class="badge-grid">';
-  QuizStorage.BADGE_DEFS.forEach(function(b) {
-    var has = earned.indexOf(b.id) !== -1;
-    html += '<div class="badge-item' + (has ? ' earned' : '') + '" title="' + b.desc + '">' +
-      '<div class="badge-icon">' + (has ? b.icon : '🔒') + '</div>' +
-      '<div class="badge-name">' + b.name + '</div>' +
-    '</div>';
-  });
-  html += '</div>';
-  section.innerHTML = html;
+  const badges = QuizStorage.BADGE_DEFS.map(b => {
+    const has = earned.includes(b.id);
+    return `<div class="badge-item${has ? ' earned' : ''}" title="${b.desc}" aria-label="${b.name}: ${b.desc}${has ? ' (earned)' : ' (locked)'}">
+      <div class="badge-icon" aria-hidden="true">${has ? b.icon : '🔒'}</div>
+      <div class="badge-name">${b.name}</div>
+    </div>`;
+  }).join('');
+
+  section.innerHTML = `<h2 class="section-title">Badges</h2><div class="badge-grid">${badges}</div>`;
 }
 
 // ── Subject Selection ──
 
 function selectSubject(subjectId) {
-  currentSubject = subjectId;
+  state.currentSubject = subjectId;
   showScreen('themeScreen');
-  var s = QuizLoader.subjects[subjectId];
-  document.getElementById('themeScreenTitle').textContent = s.name;
-  document.getElementById('themeScreenDesc').textContent = s.desc + ' — Pick a theme';
+  const s = QuizLoader.subjects[subjectId];
+  $('themeScreenTitle').textContent = s.name;
+  $('themeScreenDesc').textContent = `${s.desc} — Pick a theme`;
   renderThemeScreen();
 }
 
 // ── Theme Selection ──
 
 function renderThemeScreen() {
-  var themes = QuizLoader.getThemesForSubject(currentSubject);
-  var grid = document.getElementById('themeGrid');
+  const themes = QuizLoader.getThemesForSubject(state.currentSubject);
+  const grid = $('themeGrid');
   grid.innerHTML = '';
-  var data = QuizStorage.getData();
+  const data = QuizStorage.getData();
 
-  themes.forEach(function(t) {
-    var card = document.createElement('div');
-    card.className = 'theme-card ' + t.color + (t.loaded ? '' : ' disabled');
-    card.onclick = t.loaded ? function() { selectTheme(t.id); } : null;
+  themes.forEach(t => {
+    const card = document.createElement('div');
+    card.className = `theme-card ${t.color}${t.loaded ? '' : ' disabled'}`;
+    card.setAttribute('role', 'listitem');
 
     // Best score for this theme
-    var bestHtml = '';
-    var themeScoreKey = currentSubject + '/' + t.id;
-    for (var key in data.scores) {
-      if (key.startsWith(themeScoreKey)) {
-        var s = data.scores[key];
-        if (s.best > 0) {
-          bestHtml = '<div class="theme-best">Best: ' + s.best + '%</div>';
-          break;
-        }
+    let bestHtml = '';
+    const themeScoreKey = `${state.currentSubject}/${t.id}`;
+    for (const key in data.scores) {
+      if (key.startsWith(themeScoreKey) && data.scores[key].best > 0) {
+        bestHtml = `<div class="theme-best">Best: ${data.scores[key].best}%</div>`;
+        break;
       }
     }
 
-    card.innerHTML = '<div class="theme-icon">' + t.icon + '</div>' +
-      '<div class="theme-name">' + t.name + '</div>' +
-      '<div class="theme-count">' + (t.loaded ? t.questionCount + ' questions' : 'Coming soon') + '</div>' +
-      bestHtml;
+    card.innerHTML = `
+      <div class="theme-icon" aria-hidden="true">${t.icon}</div>
+      <div class="theme-name">${t.name}</div>
+      <div class="theme-count">${t.loaded ? t.questionCount + ' questions' : 'Coming soon'}</div>
+      ${bestHtml}`;
+
+    if (t.loaded) {
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', `${t.name}, ${t.questionCount} questions`);
+      const select = () => selectTheme(t.id);
+      card.addEventListener('click', select);
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); }
+      });
+    }
     grid.appendChild(card);
   });
 }
 
 function selectTheme(themeId) {
-  currentTheme = themeId;
-  var data = QuizLoader.getThemeData(themeId);
-  var names = QuizLoader.getCategoryNames(themeId);
-  var info = QuizLoader.themes[themeId];
+  state.currentTheme = themeId;
+  const data = QuizLoader.getThemeData(themeId);
+  const names = QuizLoader.getCategoryNames(themeId);
+  const info = QuizLoader.themes[themeId];
 
   showScreen('homeScreen');
-  document.getElementById('homeTitle').textContent = info.name;
-  document.getElementById('homeSubtitle').textContent = info.description;
+  $('homeTitle').textContent = info.name;
+  $('homeSubtitle').textContent = info.description;
 
-  var container = document.getElementById('topicButtons');
+  const container = $('topicButtons');
   container.innerHTML = '';
 
-  var regularCats = [];
-  var timedCats = [];
-  var allCount = 0;
-  var storageData = QuizStorage.getData();
+  const regularCats = [];
+  const timedCats = [];
+  let allCount = 0;
+  const storageData = QuizStorage.getData();
 
-  for (var key in data) {
-    if (!data.hasOwnProperty(key)) continue;
+  for (const key in data) {
     if (key === 'hard' || key === 'compare') {
       timedCats.push(key);
     } else {
@@ -219,109 +266,117 @@ function selectTheme(themeId) {
     }
   }
 
-  regularCats.forEach(function(cat) {
-    var btn = document.createElement('button');
+  regularCats.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'topic-btn';
-    if (cat === 'notqs') btn.style.cssText = 'border-color:#f6ad55;color:#c05621;';
+    if (cat === 'notqs')    btn.style.cssText = 'border-color:#f6ad55;color:#c05621;';
     if (cat === 'plantsys') btn.style.cssText = 'border-color:#9ae6b4;color:#276749;';
-    if (cat === 'apply') btn.style.cssText = 'border-color:#d6bcfa;color:#553c9a;';
+    if (cat === 'apply')    btn.style.cssText = 'border-color:#d6bcfa;color:#553c9a;';
 
-    var scoreKey = currentSubject + '/' + currentTheme + '/' + cat;
-    var bestInfo = storageData.scores[scoreKey];
-    var bestHtml = bestInfo && bestInfo.best > 0 ? ' <span class="topic-best">Best: ' + bestInfo.best + '%</span>' : '';
+    const scoreKey = `${state.currentSubject}/${state.currentTheme}/${cat}`;
+    const bestInfo = storageData.scores[scoreKey];
+    const bestHtml = bestInfo && bestInfo.best > 0
+      ? ` <span class="topic-best">Best: ${bestInfo.best}%</span>` : '';
 
-    btn.innerHTML = (names[cat] || cat) + bestHtml + ' <div class="count">' + data[cat].length + ' questions</div>';
-    btn.onclick = function() { startQuiz(cat); };
+    btn.innerHTML = `${names[cat] || cat}${bestHtml} <span class="count">${data[cat].length} questions</span>`;
+    btn.addEventListener('click', () => startQuiz(cat));
     container.appendChild(btn);
   });
 
-  timedCats.forEach(function(cat) {
-    var btn = document.createElement('button');
+  timedCats.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'topic-btn ' + (cat === 'compare' ? 'compare-btn' : 'hard-btn');
-    btn.innerHTML = (names[cat] || cat) + ' (Timed Challenge) <div class="count" style="color:' +
-      (cat === 'compare' ? '#ffe0b2' : '#fcc') + '">' + data[cat].length + ' questions — timed!</div>';
-    btn.onclick = function() { startQuiz(cat); };
+    btn.innerHTML = `${names[cat] || cat} (Timed Challenge) <span class="count">${data[cat].length} questions — timed!</span>`;
+    btn.addEventListener('click', () => startQuiz(cat));
     container.appendChild(btn);
   });
 
-  var allBtn = document.createElement('button');
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
   allBtn.className = 'topic-btn all-btn';
-  allBtn.innerHTML = 'ALL QUESTIONS <div class="count" style="color:#ccc">' + allCount + ' questions</div>';
-  allBtn.onclick = function() { startQuiz('all'); };
+  allBtn.innerHTML = `ALL QUESTIONS <span class="count">${allCount} questions</span>`;
+  allBtn.addEventListener('click', () => startQuiz('all'));
   container.appendChild(allBtn);
 }
 
 // ── Quiz Engine ──
 
 function shuffle(arr) {
-  var a = arr.slice();
-  for (var i = a.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
-    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
 
 function startQuiz(topic) {
-  var data = QuizLoader.getThemeData(currentTheme);
-  currentTopic = topic;
-  isHardMode = (topic === 'hard' || topic === 'compare');
-  isPracticeMode = false;
-  isReviewMode = false;
-  hardScore = 0;
-  openMarksAwarded = 0;
-  openMarksMax = 0;
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
+  const data = QuizLoader.getThemeData(state.currentTheme);
+  state.currentTopic = topic;
+  state.isHardMode = (topic === 'hard' || topic === 'compare');
+  state.isPracticeMode = false;
+  state.isReviewMode = false;
+  state.hardScore = 0;
+  state.openMarksAwarded = 0;
+  state.openMarksMax = 0;
+  clearTimers();
 
   if (topic === 'all') {
-    var allQs = [];
-    for (var key in data) {
-      if (data.hasOwnProperty(key) && key !== 'hard' && key !== 'compare') {
-        allQs = allQs.concat(data[key]);
-      }
+    let allQs = [];
+    for (const key in data) {
+      if (key !== 'hard' && key !== 'compare') allQs = allQs.concat(data[key]);
     }
-    currentQuestions = shuffle(allQs);
-    document.getElementById('topicTitle').textContent = 'All Questions';
+    state.currentQuestions = shuffle(allQs);
+    $('topicTitle').textContent = 'All Questions';
   } else {
-    currentQuestions = shuffle(data[topic].slice());
-    var names = QuizLoader.getCategoryNames(currentTheme);
-    document.getElementById('topicTitle').textContent = names[topic] || topic;
+    state.currentQuestions = shuffle(data[topic].slice());
+    const names = QuizLoader.getCategoryNames(state.currentTheme);
+    $('topicTitle').textContent = names[topic] || topic;
   }
 
   // Open-ended questions never enter timed mode — they need think time.
-  if (isHardMode) {
-    currentQuestions = currentQuestions.filter(function(q) { return q.type !== 'open'; });
+  if (state.isHardMode) {
+    state.currentQuestions = state.currentQuestions.filter(q => q.type !== 'open');
   }
 
-  window._lastTopic = topic;
-  currentIndex = 0; score = 0; wrongAnswers = []; answered = false;
+  state.lastTopic = topic;
+  state.currentIndex = 0;
+  state.score = 0;
+  state.wrongAnswers = [];
+  state.answered = false;
+
   showScreen('quizScreen');
-  document.getElementById('timerBar').style.display = isHardMode ? 'block' : 'none';
-  document.getElementById('timerText').style.display = isHardMode ? 'block' : 'none';
-  document.getElementById('hardScoreDisplay').style.display = isHardMode ? 'block' : 'none';
-  document.getElementById('scoreDisplay').style.display = isHardMode ? 'none' : 'block';
+  $('timerBar').style.display = state.isHardMode ? 'block' : 'none';
+  $('timerText').style.display = state.isHardMode ? 'block' : 'none';
+  $('hardScoreDisplay').style.display = state.isHardMode ? 'block' : 'none';
+  $('scoreDisplay').style.display = state.isHardMode ? 'none' : 'block';
   showQuestion();
 }
 
 function showQuestion() {
-  answered = false;
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
-  var q = currentQuestions[currentIndex];
-  var qNumText = 'Question ' + (currentIndex + 1) + ' of ' + currentQuestions.length;
-  var qNumEl = document.getElementById('qNumber');
-  qNumEl.textContent = qNumText;
-  if (isPracticeMode) {
-    qNumEl.innerHTML = qNumText + ' <span class="mode-label practice">Practice Mode</span>';
-  } else if (isReviewMode) {
-    qNumEl.innerHTML = qNumText + ' <span class="mode-label review">Review Mode</span>';
+  state.answered = false;
+  clearTimers();
+  const q = state.currentQuestions[state.currentIndex];
+  const qNumText = `Question ${state.currentIndex + 1} of ${state.currentQuestions.length}`;
+  const qNumEl = $('qNumber');
+  if (state.isPracticeMode) {
+    qNumEl.innerHTML = `${qNumText} <span class="mode-label practice">Practice Mode</span>`;
+  } else if (state.isReviewMode) {
+    qNumEl.innerHTML = `${qNumText} <span class="mode-label review">Review Mode</span>`;
+  } else {
+    qNumEl.textContent = qNumText;
   }
-  document.getElementById('qText').textContent = q.q;
-  document.getElementById('scoreDisplay').textContent = formatScore(score) + ' / ' + currentQuestions.length;
-  document.getElementById('progressFill').style.width = (currentIndex / currentQuestions.length * 100) + '%';
+  $('qText').textContent = q.q;
+  $('scoreDisplay').textContent = `${formatScore(state.score)} / ${state.currentQuestions.length}`;
 
-  // Always tear down any open-Q UI from the previous question.
+  const progressPct = state.currentIndex / state.currentQuestions.length * 100;
+  $('progressFill').style.width = `${progressPct}%`;
+  const progressBar = $('progressFill').parentElement;
+  if (progressBar) progressBar.setAttribute('aria-valuenow', String(Math.round(progressPct)));
+
+  // Tear down any open-Q UI from the previous question.
   removeOpenQuestionUI();
 
   if (q.type === 'open') {
@@ -330,41 +385,49 @@ function showQuestion() {
   }
 
   // MCQ rendering
-  document.getElementById('optionsList').style.display = '';
-  var indices = q.opts.map(function(_, i) { return i; });
-  var shuffled = shuffle(indices);
-  var list = document.getElementById('optionsList');
+  $('optionsList').style.display = '';
+  const indices = q.opts.map((_, i) => i);
+  const shuffled = shuffle(indices);
+  const list = $('optionsList');
   list.innerHTML = '';
-  shuffled.forEach(function(i) {
-    var li = document.createElement('li');
-    li.textContent = q.opts[i];
-    li.dataset.idx = i;
-    li.onclick = function() { pickAnswer(li, i); };
+  shuffled.forEach((origIdx, displayPos) => {
+    const li = document.createElement('li');
+    li.textContent = q.opts[origIdx];
+    li.dataset.idx = String(origIdx);
+    li.dataset.key = CONFIG.OPTION_KEYS[displayPos] || '';
+    li.setAttribute('role', 'option');
+    li.setAttribute('tabindex', '0');
+    li.setAttribute('aria-label', `${CONFIG.OPTION_KEYS[displayPos] || ''}: ${q.opts[origIdx]}`);
+    li.addEventListener('click', () => pickAnswer(li, origIdx));
+    li.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickAnswer(li, origIdx); }
+    });
     list.appendChild(li);
   });
 
-  document.getElementById('explanation').style.display = 'none';
-  document.getElementById('timeBonus').style.display = 'none';
+  $('explanation').style.display = 'none';
+  $('timeBonus').style.display = 'none';
 
-  if (isHardMode) {
-    document.getElementById('hardScoreDisplay').innerHTML = 'Points: <span class="pts">' + hardScore.toFixed(2) + '</span>';
-    timerStart = Date.now();
-    var fill = document.getElementById('timerFill');
-    var text = document.getElementById('timerText');
+  if (state.isHardMode) {
+    $('hardScoreDisplay').innerHTML = `Points: <span class="pts">${state.hardScore.toFixed(2)}</span>`;
+    state.timerStart = Date.now();
+    const fill = $('timerFill');
+    const text = $('timerText');
     fill.style.width = '100%';
     fill.className = 'timer-fill';
     text.className = 'timer-text';
-    text.textContent = HARD_TIME_LIMIT + 's';
-    timerInterval = setInterval(function() {
-      var elapsed = (Date.now() - timerStart) / 1000;
-      var remaining = Math.max(0, HARD_TIME_LIMIT - elapsed);
-      var pct = (remaining / HARD_TIME_LIMIT) * 100;
-      fill.style.width = pct + '%';
-      text.textContent = remaining.toFixed(1) + 's';
+    text.textContent = `${CONFIG.HARD_TIME_LIMIT}s`;
+    state.timerInterval = setInterval(() => {
+      const elapsed = (Date.now() - state.timerStart) / 1000;
+      const remaining = Math.max(0, CONFIG.HARD_TIME_LIMIT - elapsed);
+      const pct = (remaining / CONFIG.HARD_TIME_LIMIT) * 100;
+      fill.style.width = `${pct}%`;
+      text.textContent = `${remaining.toFixed(1)}s`;
       if (remaining <= 5) { fill.className = 'timer-fill danger'; text.className = 'timer-text danger'; }
       else if (remaining <= 10) { fill.className = 'timer-fill warn'; text.className = 'timer-text warn'; }
       if (remaining <= 0) {
-        clearInterval(timerInterval); timerInterval = null;
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
         hardTimeUp();
       }
     }, 100);
@@ -372,468 +435,453 @@ function showQuestion() {
 }
 
 function hardTimeUp() {
-  if (answered) return;
-  answered = true;
-  var q = currentQuestions[currentIndex];
-  hardScore -= 0.25;
-  document.querySelectorAll('#optionsList li').forEach(function(li) {
+  if (state.answered) return;
+  state.answered = true;
+  const q = state.currentQuestions[state.currentIndex];
+  state.hardScore -= 0.25;
+  document.querySelectorAll('#optionsList li').forEach(li => {
     li.classList.add('disabled');
-    if (parseInt(li.dataset.idx) === q.ans) li.classList.add('correct');
+    if (parseInt(li.dataset.idx, 10) === q.ans) li.classList.add('correct');
   });
-  wrongAnswers.push({ question: q.q, yourAnswer: "(Time's up!)", correctAnswer: q.opts[q.ans], explain: q.explain });
-  document.getElementById('hardScoreDisplay').innerHTML = 'Points: <span class="pts">' + hardScore.toFixed(2) + '</span>';
-  document.getElementById('explanation').textContent = q.explain;
-  document.getElementById('explanation').style.display = 'block';
-  var tb = document.getElementById('timeBonus');
+  state.wrongAnswers.push({
+    question: q.q, yourAnswer: "(Time's up!)", correctAnswer: q.opts[q.ans], explain: q.explain
+  });
+  $('hardScoreDisplay').innerHTML = `Points: <span class="pts">${state.hardScore.toFixed(2)}</span>`;
+  $('explanation').textContent = q.explain;
+  $('explanation').style.display = 'block';
+  const tb = $('timeBonus');
   tb.textContent = "Time's up! -0.25 pts";
   tb.className = 'time-bonus penalty';
   tb.style.display = 'block';
-  autoAdvanceTimer = setTimeout(function() { nextQuestion(); }, AUTO_ADVANCE_DELAY);
+  state.autoAdvanceTimer = setTimeout(nextQuestion, CONFIG.AUTO_ADVANCE_DELAY);
 }
 
 // ── Open-ended questions ──
 
-function formatScore(s) {
-  return Math.abs(s - Math.round(s)) < 0.001 ? String(Math.round(s)) : s.toFixed(1);
-}
-
-function escapeHtml(str) {
-  if (str == null) return '';
-  return String(str).replace(/[&<>"']/g, function(c) {
-    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
-  });
-}
-
 function removeOpenQuestionUI() {
-  var existing = document.getElementById('openQuestionBox');
+  const existing = $('openQuestionBox');
   if (existing) existing.parentNode.removeChild(existing);
-  var existingNext = document.getElementById('openNextBtn');
+  const existingNext = $('openNextBtn');
   if (existingNext) existingNext.parentNode.removeChild(existingNext);
 }
 
 function showOpenQuestion(q) {
   // Hide MCQ-specific UI
-  document.getElementById('optionsList').style.display = 'none';
-  document.getElementById('explanation').style.display = 'none';
-  document.getElementById('timeBonus').style.display = 'none';
+  $('optionsList').style.display = 'none';
+  $('explanation').style.display = 'none';
+  $('timeBonus').style.display = 'none';
 
-  var card = document.querySelector('#quizScreen .question-card');
-  var box = document.createElement('div');
+  const card = document.querySelector('#quizScreen .question-card');
+  const box = document.createElement('div');
   box.id = 'openQuestionBox';
   box.className = 'open-box';
-  var maxMarks = q.max_marks || 3;
-  box.innerHTML =
-    '<div class="open-marks-label">Open-Ended &middot; ' + maxMarks + ' mark' + (maxMarks === 1 ? '' : 's') + '</div>' +
-    '<textarea id="openAnswer" class="open-textarea" placeholder="Type your answer in your own words..." maxlength="2000"></textarea>' +
-    '<div class="open-actions">' +
-      '<button id="openSubmit" class="open-submit-btn" type="button">Check My Answer</button>' +
-    '</div>' +
-    '<div id="openFeedback" class="open-feedback" style="display:none"></div>';
+  const maxMarks = q.max_marks || 3;
+  box.innerHTML = `
+    <div class="open-marks-label">Open-Ended &middot; ${maxMarks} mark${maxMarks === 1 ? '' : 's'}</div>
+    <textarea id="openAnswer" class="open-textarea" placeholder="Type your answer in your own words..." maxlength="2000" aria-label="Your answer"></textarea>
+    <div class="open-actions">
+      <button id="openSubmit" class="open-submit-btn" type="button">Check My Answer</button>
+    </div>
+    <div id="openFeedback" class="open-feedback" role="status" aria-live="polite" style="display:none"></div>`;
   card.appendChild(box);
 
-  document.getElementById('openSubmit').onclick = submitOpenAnswer;
-  setTimeout(function() {
-    var ta = document.getElementById('openAnswer');
+  $('openSubmit').addEventListener('click', submitOpenAnswer);
+  setTimeout(() => {
+    const ta = $('openAnswer');
     if (ta) ta.focus();
   }, 50);
 }
 
 function submitOpenAnswer() {
-  if (answered) return;
-  var q = currentQuestions[currentIndex];
-  var ta = document.getElementById('openAnswer');
-  var btn = document.getElementById('openSubmit');
-  var feedback = document.getElementById('openFeedback');
-  var studentAnswer = (ta.value || '').trim();
+  if (state.answered) return;
+  const q = state.currentQuestions[state.currentIndex];
+  const ta = $('openAnswer');
+  const btn = $('openSubmit');
+  const feedback = $('openFeedback');
+  const studentAnswer = (ta.value || '').trim();
   if (!studentAnswer) {
     ta.classList.add('open-textarea-error');
-    setTimeout(function() { ta.classList.remove('open-textarea-error'); }, 600);
+    setTimeout(() => ta.classList.remove('open-textarea-error'), 600);
     return;
   }
-  answered = true;
+  state.answered = true;
   ta.disabled = true;
   btn.disabled = true;
   btn.textContent = 'Asking Claude...';
   feedback.style.display = 'block';
   feedback.className = 'open-feedback open-feedback-loading';
-  feedback.innerHTML = '<span class="open-spinner"></span> Asking Claude to grade your answer...';
+  feedback.innerHTML = '<span class="open-spinner" aria-hidden="true"></span> Asking Claude to grade your answer...';
 
-  var maxMarks = q.max_marks || 3;
-  var payload = {
+  const maxMarks = q.max_marks || 3;
+  const payload = {
     question: q.q,
     model_answer: q.model_answer || '',
     rubric: q.rubric || '',
     max_marks: maxMarks,
-    student_answer: studentAnswer
+    student_answer: studentAnswer,
   };
 
   fetch(getGraderUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   })
-    .then(function(r) {
+    .then(r => {
       if (!r.ok) throw new Error('grader_http_' + r.status);
       return r.json();
     })
-    .then(function(data) {
+    .then(data => {
       if (data && data.error) throw new Error(data.error);
-      var max = (typeof data.max === 'number') ? data.max : maxMarks;
-      var rawScore = (typeof data.score === 'number') ? data.score : 0;
-      var awardedScore = Math.max(0, Math.min(max, rawScore));
-      renderOpenFeedback(q, studentAnswer, awardedScore, max, data, /*isFallback*/ false);
+      const max = (typeof data.max === 'number') ? data.max : maxMarks;
+      const rawScore = (typeof data.score === 'number') ? data.score : 0;
+      const awardedScore = Math.max(0, Math.min(max, rawScore));
+      renderOpenFeedback(q, studentAnswer, awardedScore, max, data);
       recordOpenResult(q, studentAnswer, awardedScore, max, data);
     })
-    .catch(function(err) {
+    .catch(err => {
       // Graceful offline fallback: show model answer and let user self-grade.
       renderOpenFallback(q, studentAnswer, err);
     });
 }
 
-function renderOpenFeedback(q, studentAnswer, awardedScore, max, data, isFallback) {
-  var feedback = document.getElementById('openFeedback');
+function renderOpenFeedback(q, studentAnswer, awardedScore, max, data) {
+  const feedback = $('openFeedback');
   feedback.className = 'open-feedback';
-  var pct = max > 0 ? (awardedScore / max) : 0;
-  var scoreClass = pct >= 0.85 ? 'open-score-good' : (pct >= 0.5 ? 'open-score-partial' : 'open-score-low');
-  var html =
-    '<div class="open-score ' + scoreClass + '">Score: ' + formatScore(awardedScore) + ' / ' + max + '</div>';
+  const pct = max > 0 ? (awardedScore / max) : 0;
+  const scoreClass = pct >= 0.85 ? 'open-score-good' : (pct >= 0.5 ? 'open-score-partial' : 'open-score-low');
+  let html = `<div class="open-score ${scoreClass}">Score: ${formatScore(awardedScore)} / ${max}</div>`;
   if (data && data.what_went_well) {
-    html += '<div class="feedback-row feedback-good">' +
-      '<div class="feedback-label">What went well</div>' +
-      '<div class="feedback-body">' + escapeHtml(data.what_went_well) + '</div></div>';
+    html += `<div class="feedback-row feedback-good">
+      <div class="feedback-label">What went well</div>
+      <div class="feedback-body">${escapeHtml(data.what_went_well)}</div>
+    </div>`;
   }
   if (data && data.what_was_missing) {
-    html += '<div class="feedback-row feedback-missing">' +
-      '<div class="feedback-label">What was missing</div>' +
-      '<div class="feedback-body">' + escapeHtml(data.what_was_missing) + '</div></div>';
+    html += `<div class="feedback-row feedback-missing">
+      <div class="feedback-label">What was missing</div>
+      <div class="feedback-body">${escapeHtml(data.what_was_missing)}</div>
+    </div>`;
   }
-  if (data && data.suggested_phrasing) {
-    html += '<div class="feedback-row feedback-suggest">' +
-      '<div class="feedback-label">A model answer</div>' +
-      '<div class="feedback-body">' + escapeHtml(data.suggested_phrasing) + '</div></div>';
-  } else if (q.model_answer) {
-    html += '<div class="feedback-row feedback-suggest">' +
-      '<div class="feedback-label">A model answer</div>' +
-      '<div class="feedback-body">' + escapeHtml(q.model_answer) + '</div></div>';
+  const modelAnswerText = (data && data.suggested_phrasing) || q.model_answer;
+  if (modelAnswerText) {
+    html += `<div class="feedback-row feedback-suggest">
+      <div class="feedback-label">A model answer</div>
+      <div class="feedback-body">${escapeHtml(modelAnswerText)}</div>
+    </div>`;
   }
   feedback.innerHTML = html;
   appendOpenNextButton();
 }
 
-function renderOpenFallback(q, studentAnswer, err) {
-  var feedback = document.getElementById('openFeedback');
+function renderOpenFallback(q, studentAnswer /* , err */) {
+  const feedback = $('openFeedback');
   feedback.className = 'open-feedback open-feedback-fallback';
-  var maxMarks = q.max_marks || 3;
-  feedback.innerHTML =
-    '<div class="feedback-row feedback-missing">' +
-      '<div class="feedback-label">Couldn\'t reach the grader</div>' +
-      '<div class="feedback-body">No internet, or the grader isn\'t deployed yet. Compare your answer with the model answer below and self-grade.</div>' +
-    '</div>' +
-    '<div class="feedback-row feedback-suggest">' +
-      '<div class="feedback-label">Model answer</div>' +
-      '<div class="feedback-body">' + escapeHtml(q.model_answer || '(no model answer provided)') + '</div>' +
-    '</div>' +
-    '<div class="open-self-grade">' +
-      '<div class="open-self-grade-label">How did you do?</div>' +
-      '<button type="button" class="self-grade-btn self-grade-full" data-marks="' + maxMarks + '">Got it right (' + maxMarks + '/' + maxMarks + ')</button>' +
-      (maxMarks >= 2 ? '<button type="button" class="self-grade-btn self-grade-partial" data-marks="' + Math.ceil(maxMarks / 2) + '">Partly right (' + Math.ceil(maxMarks / 2) + '/' + maxMarks + ')</button>' : '') +
-      '<button type="button" class="self-grade-btn self-grade-none" data-marks="0">Missed it (0/' + maxMarks + ')</button>' +
-    '</div>';
-  var btns = feedback.querySelectorAll('.self-grade-btn');
-  btns.forEach(function(b) {
-    b.onclick = function() {
-      var marks = parseInt(b.dataset.marks, 10) || 0;
-      btns.forEach(function(x) { x.disabled = true; });
+  const maxMarks = q.max_marks || 3;
+  feedback.innerHTML = `
+    <div class="feedback-row feedback-missing">
+      <div class="feedback-label">Couldn't reach the grader</div>
+      <div class="feedback-body">No internet, or the grader isn't deployed yet. Compare your answer with the model answer below and self-grade.</div>
+    </div>
+    <div class="feedback-row feedback-suggest">
+      <div class="feedback-label">Model answer</div>
+      <div class="feedback-body">${escapeHtml(q.model_answer || '(no model answer provided)')}</div>
+    </div>
+    <div class="open-self-grade">
+      <div class="open-self-grade-label">How did you do?</div>
+      <button type="button" class="self-grade-btn self-grade-full" data-marks="${maxMarks}">Got it right (${maxMarks}/${maxMarks})</button>
+      ${maxMarks >= 2 ? `<button type="button" class="self-grade-btn self-grade-partial" data-marks="${Math.ceil(maxMarks / 2)}">Partly right (${Math.ceil(maxMarks / 2)}/${maxMarks})</button>` : ''}
+      <button type="button" class="self-grade-btn self-grade-none" data-marks="0">Missed it (0/${maxMarks})</button>
+    </div>`;
+  const btns = feedback.querySelectorAll('.self-grade-btn');
+  btns.forEach(b => {
+    b.addEventListener('click', () => {
+      const marks = parseInt(b.dataset.marks, 10) || 0;
+      btns.forEach(x => { x.disabled = true; });
       b.classList.add('selected');
-      var fakeData = {
+      const fakeData = {
         score: marks,
         max: maxMarks,
         what_went_well: marks === maxMarks ? 'You said you got it right — well done!' : '',
         what_was_missing: marks < maxMarks ? 'Compare your answer with the model answer above.' : '',
-        suggested_phrasing: q.model_answer || ''
+        suggested_phrasing: q.model_answer || '',
       };
       recordOpenResult(q, studentAnswer, marks, maxMarks, fakeData);
       appendOpenNextButton();
-    };
+    });
   });
 }
 
 function recordOpenResult(q, studentAnswer, awardedScore, max, data) {
-  var pct = max > 0 ? (awardedScore / max) : 0;
+  const pct = max > 0 ? (awardedScore / max) : 0;
   // Add fractional credit toward total score.
-  score += pct;
-  openMarksAwarded += awardedScore;
-  openMarksMax += max;
-  document.getElementById('scoreDisplay').textContent = formatScore(score) + ' / ' + currentQuestions.length;
+  state.score += pct;
+  state.openMarksAwarded += awardedScore;
+  state.openMarksMax += max;
+  $('scoreDisplay').textContent = `${formatScore(state.score)} / ${state.currentQuestions.length}`;
 
   // In review mode, remove perfectly answered questions from wrong bank.
-  if (isReviewMode && pct >= 0.999) {
+  if (state.isReviewMode && pct >= 0.999) {
     QuizStorage.removeFromWrongBank(q.q);
   }
 
   // Push to wrong list if not perfect, with extended fields for review.
   if (pct < 0.999) {
-    wrongAnswers.push({
+    state.wrongAnswers.push({
       question: q.q,
       yourAnswer: studentAnswer,
       correctAnswer: q.model_answer || '',
       explain: (data && data.what_was_missing) ? data.what_was_missing : (q.model_answer || ''),
       type: 'open',
-      studentAnswer: studentAnswer,
+      studentAnswer,
       modelAnswer: q.model_answer || '',
       feedback: {
         score: awardedScore,
-        max: max,
+        max,
         what_went_well: (data && data.what_went_well) || '',
         what_was_missing: (data && data.what_was_missing) || '',
-        suggested_phrasing: (data && data.suggested_phrasing) || ''
+        suggested_phrasing: (data && data.suggested_phrasing) || '',
       },
-      maxMarks: max
+      maxMarks: max,
     });
   }
 }
 
 function appendOpenNextButton() {
-  if (document.getElementById('openNextBtn')) return;
-  var card = document.querySelector('#quizScreen .question-card');
-  var btn = document.createElement('button');
+  if ($('openNextBtn')) return;
+  const card = document.querySelector('#quizScreen .question-card');
+  const btn = document.createElement('button');
   btn.id = 'openNextBtn';
   btn.className = 'open-next-btn';
   btn.type = 'button';
-  btn.textContent = (currentIndex + 1 < currentQuestions.length) ? 'Next Question →' : 'See Results →';
-  btn.onclick = function() { nextQuestion(); };
+  btn.textContent = (state.currentIndex + 1 < state.currentQuestions.length) ? 'Next Question →' : 'See Results →';
+  btn.addEventListener('click', nextQuestion);
   card.appendChild(btn);
-  setTimeout(function() { btn.focus(); }, 50);
+  setTimeout(() => btn.focus(), 50);
 }
 
 function pickAnswer(el, idx) {
-  if (answered) return;
-  answered = true;
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  var q = currentQuestions[currentIndex];
-  document.querySelectorAll('#optionsList li').forEach(function(li) {
+  if (state.answered) return;
+  state.answered = true;
+  if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
+  const q = state.currentQuestions[state.currentIndex];
+  document.querySelectorAll('#optionsList li').forEach(li => {
     li.classList.add('disabled');
-    if (parseInt(li.dataset.idx) === q.ans) li.classList.add('correct');
+    if (parseInt(li.dataset.idx, 10) === q.ans) li.classList.add('correct');
   });
-  var tb = document.getElementById('timeBonus');
-  if (isHardMode) {
-    var elapsed = (Date.now() - timerStart) / 1000;
-    var remaining = Math.max(0, HARD_TIME_LIMIT - elapsed);
+  const tb = $('timeBonus');
+  if (state.isHardMode) {
+    const elapsed = (Date.now() - state.timerStart) / 1000;
+    const remaining = Math.max(0, CONFIG.HARD_TIME_LIMIT - elapsed);
     if (idx === q.ans) {
-      score++;
+      state.score++;
       el.classList.add('correct');
-      var timeBonus = remaining / HARD_TIME_LIMIT;
-      var totalPts = 1 + timeBonus;
-      hardScore += totalPts;
-      tb.textContent = '+' + totalPts.toFixed(2) + ' pts (speed bonus: +' + timeBonus.toFixed(2) + ')';
+      const timeBonus = remaining / CONFIG.HARD_TIME_LIMIT;
+      const totalPts = 1 + timeBonus;
+      state.hardScore += totalPts;
+      tb.textContent = `+${totalPts.toFixed(2)} pts (speed bonus: +${timeBonus.toFixed(2)})`;
       tb.className = 'time-bonus';
       tb.style.display = 'block';
     } else {
       el.classList.add('wrong');
-      hardScore -= 0.25;
-      wrongAnswers.push({ question: q.q, yourAnswer: q.opts[idx], correctAnswer: q.opts[q.ans], explain: q.explain });
+      state.hardScore -= 0.25;
+      state.wrongAnswers.push({
+        question: q.q, yourAnswer: q.opts[idx], correctAnswer: q.opts[q.ans], explain: q.explain
+      });
       tb.textContent = '-0.25 pts';
       tb.className = 'time-bonus penalty';
       tb.style.display = 'block';
     }
-    document.getElementById('hardScoreDisplay').innerHTML = 'Points: <span class="pts">' + hardScore.toFixed(2) + '</span>';
+    $('hardScoreDisplay').innerHTML = `Points: <span class="pts">${state.hardScore.toFixed(2)}</span>`;
   } else {
     if (idx === q.ans) {
-      score++; el.classList.add('correct');
-      // In review mode, remove correctly answered questions from wrong bank
-      if (isReviewMode) {
-        QuizStorage.removeFromWrongBank(q.q);
-      }
+      state.score++;
+      el.classList.add('correct');
+      if (state.isReviewMode) QuizStorage.removeFromWrongBank(q.q);
     } else {
       el.classList.add('wrong');
-      wrongAnswers.push({ question: q.q, yourAnswer: q.opts[idx], correctAnswer: q.opts[q.ans], explain: q.explain });
+      state.wrongAnswers.push({
+        question: q.q, yourAnswer: q.opts[idx], correctAnswer: q.opts[q.ans], explain: q.explain
+      });
     }
-    document.getElementById('scoreDisplay').textContent = formatScore(score) + ' / ' + currentQuestions.length;
+    $('scoreDisplay').textContent = `${formatScore(state.score)} / ${state.currentQuestions.length}`;
     tb.style.display = 'none';
   }
-  document.getElementById('explanation').textContent = q.explain;
-  document.getElementById('explanation').style.display = 'block';
-  autoAdvanceTimer = setTimeout(function() { nextQuestion(); }, AUTO_ADVANCE_DELAY);
+  $('explanation').textContent = q.explain;
+  $('explanation').style.display = 'block';
+  state.autoAdvanceTimer = setTimeout(nextQuestion, CONFIG.AUTO_ADVANCE_DELAY);
 }
 
 function nextQuestion() {
-  if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
-  currentIndex++;
-  if (currentIndex >= currentQuestions.length) showResults();
+  if (state.autoAdvanceTimer) { clearTimeout(state.autoAdvanceTimer); state.autoAdvanceTimer = null; }
+  state.currentIndex++;
+  if (state.currentIndex >= state.currentQuestions.length) showResults();
   else showQuestion();
 }
 
 function showResults() {
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  clearTimers();
 
-  // Record result and get XP info (skip recording for practice/review modes)
-  var openMarks = openMarksMax > 0 ? { awarded: openMarksAwarded, max: openMarksMax } : null;
-  var result;
-  if (isPracticeMode || isReviewMode) {
+  const openMarks = state.openMarksMax > 0
+    ? { awarded: state.openMarksAwarded, max: state.openMarksMax }
+    : null;
+
+  let result;
+  if (state.isPracticeMode || state.isReviewMode) {
     result = { xpGained: 0, newBadges: [], level: 0, streak: 0 };
   } else {
     result = QuizStorage.recordQuizResult(
-      currentSubject, currentTheme, currentTopic,
-      currentQuestions.length, score, wrongAnswers, openMarks
+      state.currentSubject, state.currentTheme, state.currentTopic,
+      state.currentQuestions.length, state.score, state.wrongAnswers, openMarks
     );
   }
 
   showScreen('resultsScreen');
-  var g = document.getElementById('gradeLabel');
-  var pct;
-  if (isHardMode) {
-    var maxPossible = currentQuestions.length * 2;
-    document.getElementById('finalScore').innerHTML = hardScore.toFixed(2) + ' <span>/ ' + maxPossible + ' pts</span>';
-    pct = Math.round((score / currentQuestions.length) * 100);
+  const g = $('gradeLabel');
+  let pct;
+  if (state.isHardMode) {
+    const maxPossible = state.currentQuestions.length * 2;
+    $('finalScore').innerHTML = `${state.hardScore.toFixed(2)} <span>/ ${maxPossible} pts</span>`;
+    pct = Math.round((state.score / state.currentQuestions.length) * 100);
   } else {
-    pct = Math.round((score / currentQuestions.length) * 100);
-    document.getElementById('finalScore').innerHTML = formatScore(score) + ' <span>/ ' + currentQuestions.length + ' (' + pct + '%)</span>';
+    pct = Math.round((state.score / state.currentQuestions.length) * 100);
+    $('finalScore').innerHTML = `${formatScore(state.score)} <span>/ ${state.currentQuestions.length} (${pct}%)</span>`;
   }
-  if (pct >= 90) { g.textContent = 'Excellent!'; g.className = 'grade gold'; }
-  else if (pct >= 70) { g.textContent = 'Good Job!'; g.className = 'grade silver'; }
-  else if (pct >= 50) { g.textContent = 'Keep Trying!'; g.className = 'grade bronze'; }
-  else { g.textContent = 'Study More & Try Again!'; g.className = 'grade try'; }
+  if (pct >= 90)      { g.textContent = 'Excellent!';            g.className = 'grade gold'; }
+  else if (pct >= 70) { g.textContent = 'Good Job!';             g.className = 'grade silver'; }
+  else if (pct >= 50) { g.textContent = 'Keep Trying!';          g.className = 'grade bronze'; }
+  else                { g.textContent = 'Study More & Try Again!'; g.className = 'grade try'; }
 
-  // XP display
-  var xpEl = document.getElementById('xpGained');
-  if (isPracticeMode || isReviewMode) {
-    xpEl.innerHTML = (isPracticeMode ? 'Practice Mode' : 'Review Mode') + ' — no XP awarded';
-    xpEl.style.display = 'block';
+  const xpEl = $('xpGained');
+  if (state.isPracticeMode || state.isReviewMode) {
+    xpEl.innerHTML = `${state.isPracticeMode ? 'Practice Mode' : 'Review Mode'} — no XP awarded`;
   } else {
-    xpEl.innerHTML = '+' + result.xpGained + ' XP' +
-      (result.streak > 1 ? ' &middot; ' + result.streak + '-day streak 🔥' : '');
-    xpEl.style.display = 'block';
+    xpEl.innerHTML = `+${result.xpGained} XP` +
+      (result.streak > 1 ? ` &middot; ${result.streak}-day streak 🔥` : '');
   }
+  xpEl.style.display = 'block';
 
-  // New badges
-  var nbEl = document.getElementById('newBadges');
+  const nbEl = $('newBadges');
   if (result.newBadges.length > 0) {
-    var badgeHtml = '<div class="new-badge-label">New Badge!</div>';
-    result.newBadges.forEach(function(bid) {
-      var def = QuizStorage.BADGE_DEFS.find(function(b) { return b.id === bid; });
-      if (def) {
-        badgeHtml += '<div class="new-badge">' + def.icon + ' ' + def.name + '</div>';
-      }
-    });
-    nbEl.innerHTML = badgeHtml;
+    const badgeHtml = result.newBadges.map(bid => {
+      const def = QuizStorage.BADGE_DEFS.find(b => b.id === bid);
+      return def ? `<div class="new-badge">${def.icon} ${def.name}</div>` : '';
+    }).join('');
+    nbEl.innerHTML = `<div class="new-badge-label">New Badge!</div>${badgeHtml}`;
     nbEl.style.display = 'block';
   } else {
     nbEl.style.display = 'none';
   }
 
-  // Practice wrong answers button
-  var practiceBtn = document.getElementById('practiceWrongBtn');
+  const practiceBtn = $('practiceWrongBtn');
   if (practiceBtn) {
-    practiceBtn.style.display = (wrongAnswers.length > 0 && !isPracticeMode) ? 'inline-block' : 'none';
+    practiceBtn.style.display = (state.wrongAnswers.length > 0 && !state.isPracticeMode) ? 'inline-block' : 'none';
   }
 
-  var wl = document.getElementById('wrongList');
-  if (wrongAnswers.length === 0) {
-    wl.innerHTML = '<p style="color:#38a169;font-weight:600;margin-top:12px;">Perfect! Every answer correct!</p>';
+  const wl = $('wrongList');
+  if (state.wrongAnswers.length === 0) {
+    wl.innerHTML = '<p style="color:var(--correct-accent);font-weight:600;margin-top:12px;">Perfect! Every answer correct!</p>';
   } else {
-    var h = '<h3>Review These (' + wrongAnswers.length + '):</h3>';
-    wrongAnswers.forEach(function(w, i) {
-      h += '<div class="wrong-item"><div class="wi-q">' + (i + 1) + '. ' + escapeHtml(w.question) + '</div>';
+    const items = state.wrongAnswers.map((w, i) => {
+      let body;
       if (w.type === 'open') {
-        var fb = w.feedback || {};
-        h += '<div class="wi-open-score">Score: ' + formatScore(fb.score || 0) + ' / ' + (fb.max || w.maxMarks || 0) + '</div>';
-        h += '<div class="wi-open-row"><span class="wi-open-label">Your answer:</span> ' + escapeHtml(w.studentAnswer || '') + '</div>';
-        if (fb.what_went_well) h += '<div class="wi-open-row wi-open-good"><span class="wi-open-label">What went well:</span> ' + escapeHtml(fb.what_went_well) + '</div>';
-        if (fb.what_was_missing) h += '<div class="wi-open-row wi-open-missing"><span class="wi-open-label">What was missing:</span> ' + escapeHtml(fb.what_was_missing) + '</div>';
-        if (w.modelAnswer) h += '<div class="wi-a">Model answer: ' + escapeHtml(w.modelAnswer) + '</div>';
+        const fb = w.feedback || {};
+        const wellRow = fb.what_went_well
+          ? `<div class="wi-open-row wi-open-good"><span class="wi-open-label">What went well:</span> ${escapeHtml(fb.what_went_well)}</div>` : '';
+        const missingRow = fb.what_was_missing
+          ? `<div class="wi-open-row wi-open-missing"><span class="wi-open-label">What was missing:</span> ${escapeHtml(fb.what_was_missing)}</div>` : '';
+        const modelRow = w.modelAnswer
+          ? `<div class="wi-a">Model answer: ${escapeHtml(w.modelAnswer)}</div>` : '';
+        body = `
+          <div class="wi-open-score">Score: ${formatScore(fb.score || 0)} / ${fb.max || w.maxMarks || 0}</div>
+          <div class="wi-open-row"><span class="wi-open-label">Your answer:</span> ${escapeHtml(w.studentAnswer || '')}</div>
+          ${wellRow}${missingRow}${modelRow}`;
       } else {
-        h += '<div style="color:#e53e3e;">You picked: ' + escapeHtml(w.yourAnswer) + '</div>';
-        h += '<div class="wi-a">Answer: ' + escapeHtml(w.correctAnswer) + '</div>';
-        h += '<div style="color:#666;font-size:13px;margin-top:4px;">' + escapeHtml(w.explain) + '</div>';
+        body = `
+          <div style="color:var(--wrong-accent);">You picked: ${escapeHtml(w.yourAnswer)}</div>
+          <div class="wi-a">Answer: ${escapeHtml(w.correctAnswer)}</div>
+          <div style="color:var(--text-muted);font-size:13px;margin-top:4px;">${escapeHtml(w.explain)}</div>`;
       }
-      h += '</div>';
-    });
-    wl.innerHTML = h;
+      return `<div class="wrong-item"><div class="wi-q">${i + 1}. ${escapeHtml(w.question)}</div>${body}</div>`;
+    }).join('');
+    wl.innerHTML = `<h3>Review These (${state.wrongAnswers.length}):</h3>${items}`;
   }
 }
 
 // ── Practice Wrong Answers ──
 
 function practiceWrongAnswers() {
-  if (wrongAnswers.length === 0) return;
+  if (state.wrongAnswers.length === 0) return;
 
-  // Build question objects from the wrongAnswers of the just-completed quiz
-  var practiceQs = [];
-  wrongAnswers.forEach(function(w) {
-    var found = findQuestionInData(w.question);
-    if (found) {
-      practiceQs.push(found);
-    }
-  });
+  const practiceQs = state.wrongAnswers
+    .map(w => findQuestionInData(w.question))
+    .filter(Boolean);
 
   if (practiceQs.length === 0) return;
 
-  isPracticeMode = true;
-  isReviewMode = false;
-  isHardMode = false;
-  hardScore = 0;
-  currentQuestions = shuffle(practiceQs);
-  currentIndex = 0; score = 0; wrongAnswers = []; answered = false;
+  state.isPracticeMode = true;
+  state.isReviewMode = false;
+  state.isHardMode = false;
+  state.hardScore = 0;
+  state.openMarksAwarded = 0;
+  state.openMarksMax = 0;
+  state.currentQuestions = shuffle(practiceQs);
+  state.currentIndex = 0;
+  state.score = 0;
+  state.wrongAnswers = [];
+  state.answered = false;
 
   showScreen('quizScreen');
-  document.getElementById('topicTitle').textContent = 'Practice Wrong Answers';
-  document.getElementById('timerBar').style.display = 'none';
-  document.getElementById('timerText').style.display = 'none';
-  document.getElementById('hardScoreDisplay').style.display = 'none';
-  document.getElementById('scoreDisplay').style.display = 'block';
+  $('topicTitle').textContent = 'Practice Wrong Answers';
+  $('timerBar').style.display = 'none';
+  $('timerText').style.display = 'none';
+  $('hardScoreDisplay').style.display = 'none';
+  $('scoreDisplay').style.display = 'block';
   showQuestion();
 }
 
 // ── Review Mode from Dashboard ──
 
 function startReviewMode() {
-  var items = QuizStorage.getRandomWrongBankItems(20);
+  const items = QuizStorage.getRandomWrongBankItems(CONFIG.REVIEW_BATCH_SIZE);
   if (items.length === 0) return;
 
-  // Reconstruct question objects from wrong bank entries
-  var reviewQs = [];
-  items.forEach(function(item) {
-    var found = findQuestionInData(item.q);
-    if (found) {
-      reviewQs.push(found);
-    }
-  });
-
+  const reviewQs = items
+    .map(item => findQuestionInData(item.q))
+    .filter(Boolean);
   if (reviewQs.length === 0) return;
 
-  isReviewMode = true;
-  isPracticeMode = false;
-  isHardMode = false;
-  hardScore = 0;
-  currentSubject = 'review';
-  currentTheme = 'review';
-  currentTopic = 'review';
-  currentQuestions = shuffle(reviewQs);
-  currentIndex = 0; score = 0; wrongAnswers = []; answered = false;
+  state.isReviewMode = true;
+  state.isPracticeMode = false;
+  state.isHardMode = false;
+  state.hardScore = 0;
+  state.openMarksAwarded = 0;
+  state.openMarksMax = 0;
+  state.currentSubject = 'review';
+  state.currentTheme = 'review';
+  state.currentTopic = 'review';
+  state.currentQuestions = shuffle(reviewQs);
+  state.currentIndex = 0;
+  state.score = 0;
+  state.wrongAnswers = [];
+  state.answered = false;
 
   showScreen('quizScreen');
-  document.getElementById('topicTitle').textContent = 'Review Wrong Answers';
-  document.getElementById('timerBar').style.display = 'none';
-  document.getElementById('timerText').style.display = 'none';
-  document.getElementById('hardScoreDisplay').style.display = 'none';
-  document.getElementById('scoreDisplay').style.display = 'block';
+  $('topicTitle').textContent = 'Review Wrong Answers';
+  $('timerBar').style.display = 'none';
+  $('timerText').style.display = 'none';
+  $('hardScoreDisplay').style.display = 'none';
+  $('scoreDisplay').style.display = 'block';
   showQuestion();
 }
 
 // ── Find question in loaded data ──
 
 function findQuestionInData(questionText) {
-  for (var themeId in window.QUIZ_DATA) {
-    if (!window.QUIZ_DATA.hasOwnProperty(themeId)) continue;
-    var themeData = window.QUIZ_DATA[themeId];
-    for (var cat in themeData) {
-      if (!themeData.hasOwnProperty(cat)) continue;
-      var questions = themeData[cat];
-      for (var i = 0; i < questions.length; i++) {
-        if (questions[i].q === questionText) {
-          return questions[i];
-        }
-      }
+  for (const themeId in window.QUIZ_DATA) {
+    const themeData = window.QUIZ_DATA[themeId];
+    for (const cat in themeData) {
+      const found = themeData[cat].find(qq => qq.q === questionText);
+      if (found) return found;
     }
   }
   return null;
@@ -843,190 +891,207 @@ function findQuestionInData(questionText) {
 
 function showProgress() {
   showScreen('progressScreen');
-  var data = QuizStorage.getData();
-  var subjectStats = QuizStorage.getSubjectStats();
-  var dailyCounts = QuizStorage.getDailyCounts(data);
-
-  // Overall stats
-  var overallEl = document.getElementById('progressOverall');
-  var levelTitle = QuizStorage.getLevelTitle(data.level);
-  var nextXp = QuizStorage.xpForLevel(data.level + 1);
+  const data = QuizStorage.getData();
+  const subjectStats = QuizStorage.getSubjectStats();
+  const dailyCounts = QuizStorage.getDailyCounts(data);
+  const levelTitle = QuizStorage.getLevelTitle(data.level);
+  const nextXp = QuizStorage.xpForLevel(data.level + 1);
 
   // Streak dots (last 7 days)
-  var streakDotsHtml = '<div style="margin-top:12px;"><div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Last 7 Days</div><div class="streak-dots">';
-  var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  for (var d = 6; d >= 0; d--) {
-    var date = new Date();
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const streakDots = [];
+  for (let d = 6; d >= 0; d--) {
+    const date = new Date();
     date.setDate(date.getDate() - d);
-    var dateStr = date.toISOString().slice(0, 10);
-    var dayCount = dailyCounts[dateStr] || 0;
-    var isActive = dayCount > 0;
-    var dayLabel = dayNames[date.getDay()];
-    streakDotsHtml += '<div class="streak-dot ' + (isActive ? 'active' : 'inactive') + '" title="' + dateStr + ': ' + dayCount + ' questions">' + dayLabel.charAt(0) + '</div>';
+    const dateStr = date.toISOString().slice(0, 10);
+    const dayCount = dailyCounts[dateStr] || 0;
+    const isActive = dayCount > 0;
+    const dayLabel = dayNames[date.getDay()];
+    streakDots.push(`<div class="streak-dot ${isActive ? 'active' : 'inactive'}" title="${dateStr}: ${dayCount} questions">${dayLabel.charAt(0)}</div>`);
   }
-  streakDotsHtml += '</div></div>';
+  const streakDotsHtml = `<div style="margin-top:12px;">
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Last 7 Days</div>
+    <div class="streak-dots">${streakDots.join('')}</div>
+  </div>`;
 
-  overallEl.innerHTML =
-    '<div class="stat-row">' +
-      '<div class="stat-box">' +
-        '<div class="stat-value">' + data.xp + '</div>' +
-        '<div class="stat-label">Total XP</div>' +
-      '</div>' +
-      '<div class="stat-box">' +
-        '<div class="stat-value">' + data.level + '</div>' +
-        '<div class="stat-label">' + levelTitle + '</div>' +
-        '<div class="stat-sub">' + data.xp + ' / ' + nextXp + ' XP</div>' +
-      '</div>' +
-      '<div class="stat-box">' +
-        '<div class="stat-value">' + (data.streak || 0) + '</div>' +
-        '<div class="stat-label">Day Streak</div>' +
-      '</div>' +
-    '</div>' +
-    streakDotsHtml;
+  $('progressOverall').innerHTML = `
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-value">${data.xp}</div>
+        <div class="stat-label">Total XP</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">${data.level}</div>
+        <div class="stat-label">${levelTitle}</div>
+        <div class="stat-sub">${data.xp} / ${nextXp} XP</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">${data.streak || 0}</div>
+        <div class="stat-label">Day Streak</div>
+      </div>
+    </div>
+    ${streakDotsHtml}`;
 
   // Per-subject breakdown
-  var subjectsEl = document.getElementById('progressSubjects');
-  var html = '';
-  var subjects = QuizLoader.subjects;
+  let html = '';
+  for (const subId in QuizLoader.subjects) {
+    const sub = QuizLoader.subjects[subId];
+    const stats = subjectStats[subId];
+    const themes = QuizLoader.getThemesForSubject(subId);
 
-  for (var subId in subjects) {
-    if (!subjects.hasOwnProperty(subId)) continue;
-    var sub = subjects[subId];
-    var stats = subjectStats[subId];
-    var themes = QuizLoader.getThemesForSubject(subId);
-    var hasAnyData = !!stats;
-
-    // Calculate subject-level stats
-    var subjectAnswered = 0;
-    var subjectAccuracy = 0;
+    let subjectAnswered = 0;
+    let subjectAccuracy = 0;
     if (stats) {
-      // Count total attempts across all themes/topics
       subjectAnswered = stats.totalAttempts;
-      // Calculate accuracy from best scores
-      var scoreCount = 0;
-      var scoreSum = 0;
-      for (var sk in stats.bestScores) {
-        if (stats.bestScores.hasOwnProperty(sk)) {
-          scoreSum += stats.bestScores[sk];
-          scoreCount++;
-        }
+      let scoreCount = 0, scoreSum = 0;
+      for (const sk in stats.bestScores) {
+        scoreSum += stats.bestScores[sk];
+        scoreCount++;
       }
       subjectAccuracy = scoreCount > 0 ? Math.round(scoreSum / scoreCount) : 0;
     }
 
-    html += '<div class="progress-subject-card">';
-    html += '<div class="progress-subject-header">' +
-      '<div class="subject-icon">' + sub.icon + '</div>' +
-      '<div class="subject-name" style="color:' + sub.color + '">' + sub.name + '</div>' +
-      '<div class="progress-subject-meta">' +
-        (hasAnyData ? subjectAnswered + ' attempts &middot; ' + subjectAccuracy + '% avg' : 'Not started') +
-      '</div></div>';
+    html += `<div class="progress-subject-card">
+      <div class="progress-subject-header">
+        <div class="subject-icon" aria-hidden="true">${sub.icon}</div>
+        <div class="subject-name" style="color:${sub.color}">${sub.name}</div>
+        <div class="progress-subject-meta">${stats ? `${subjectAnswered} attempts &middot; ${subjectAccuracy}% avg` : 'Not started'}</div>
+      </div>`;
 
-    // Per-theme progress bars
-    themes.forEach(function(theme) {
+    themes.forEach(theme => {
       if (!theme.loaded) return;
-      var totalQsInTheme = theme.questionCount;
-      var themeStats = stats && stats.themes[theme.id];
-      var attempted = themeStats ? themeStats.attempted : 0;
-      var attemptPct = totalQsInTheme > 0 ? Math.min(100, Math.round((attempted / totalQsInTheme) * 100)) : 0;
+      const totalQsInTheme = theme.questionCount;
+      const themeStats = stats && stats.themes[theme.id];
+      const attempted = themeStats ? themeStats.attempted : 0;
+      const attemptPct = totalQsInTheme > 0 ? Math.min(100, Math.round((attempted / totalQsInTheme) * 100)) : 0;
 
-      // Theme color mapping
-      var barColor = sub.color;
+      html += `<div class="progress-theme-row">
+        <div class="progress-theme-label">
+          <span class="theme-name">${theme.name}</span>
+          <span class="theme-stat">${attempted} / ${totalQsInTheme} attempted</span>
+        </div>
+        <div class="progress-theme-bar"><div class="progress-theme-fill" style="width:${attemptPct}%;background:${sub.color}"></div></div>`;
 
-      html += '<div class="progress-theme-row">';
-      html += '<div class="progress-theme-label">' +
-        '<span class="theme-name">' + theme.name + '</span>' +
-        '<span class="theme-stat">' + attempted + ' / ' + totalQsInTheme + ' attempted</span>' +
-      '</div>';
-      html += '<div class="progress-theme-bar"><div class="progress-theme-fill" style="width:' + attemptPct + '%;background:' + barColor + '"></div></div>';
-
-      // Best scores per topic within this theme
       if (themeStats && themeStats.bestScores) {
-        var hasScores = false;
-        var scoresHtml = '<div class="progress-best-scores">';
-        var catNames = QuizLoader.getCategoryNames(theme.id);
-        for (var topicKey in themeStats.bestScores) {
-          if (!themeStats.bestScores.hasOwnProperty(topicKey)) continue;
-          hasScores = true;
-          var topicName = catNames[topicKey] || topicKey;
-          scoresHtml += '<div class="progress-best-item">' +
-            '<span class="progress-best-name">' + topicName + '</span>' +
-            '<span class="progress-best-score">' + themeStats.bestScores[topicKey] + '%</span>' +
-          '</div>';
+        const catNames = QuizLoader.getCategoryNames(theme.id);
+        const scoreItems = [];
+        for (const topicKey in themeStats.bestScores) {
+          const topicName = catNames[topicKey] || topicKey;
+          scoreItems.push(`<div class="progress-best-item">
+            <span class="progress-best-name">${topicName}</span>
+            <span class="progress-best-score">${themeStats.bestScores[topicKey]}%</span>
+          </div>`);
         }
-        scoresHtml += '</div>';
-        if (hasScores) html += scoresHtml;
+        if (scoreItems.length > 0) {
+          html += `<div class="progress-best-scores">${scoreItems.join('')}</div>`;
+        }
       }
-
       html += '</div>';
     });
 
     html += '</div>';
   }
-
-  subjectsEl.innerHTML = html;
+  $('progressSubjects').innerHTML = html;
 }
 
 // ── Navigation ──
 
 function goDashboard() {
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
+  clearTimers();
   removeOpenQuestionUI();
   renderDashboard();
 }
 
 function goHome() {
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
+  clearTimers();
   removeOpenQuestionUI();
-  selectTheme(currentTheme);
+  selectTheme(state.currentTheme);
 }
 
 function goThemes() {
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
+  clearTimers();
   removeOpenQuestionUI();
-  selectSubject(currentSubject);
+  selectSubject(state.currentSubject);
 }
 
 // ── Dark Mode ──
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  var btn = document.getElementById('themeToggle');
-  if (btn) btn.innerHTML = theme === 'dark' ? '&#9788;' : '&#9790;';
+  const btn = $('themeToggle');
+  if (btn) {
+    btn.innerHTML = theme === 'dark' ? '&#9788;' : '&#9790;';
+    btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+  }
 }
 
 function toggleDarkMode() {
-  var current = document.documentElement.getAttribute('data-theme') || 'light';
-  var next = current === 'dark' ? 'light' : 'dark';
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
   applyTheme(next);
-  try { localStorage.setItem('natsquiz-theme', next); } catch(e) {}
+  try { localStorage.setItem('natsquiz-theme', next); } catch (e) {}
 }
 
 function initTheme() {
-  var saved = null;
-  try { saved = localStorage.getItem('natsquiz-theme'); } catch(e) {}
+  let saved = null;
+  try { saved = localStorage.getItem('natsquiz-theme'); } catch (e) {}
+  if (!saved && window.matchMedia) {
+    const prefers = window.matchMedia('(prefers-color-scheme: dark)');
+    saved = prefers.matches ? 'dark' : 'light';
+  }
   applyTheme(saved || 'light');
 }
 
-// ── Expose to HTML ──
+// ── Keyboard shortcuts ──
+// On quiz screen, allow 1-4 (or A-D) to pick options.
+function handleKeyboardShortcut(e) {
+  const quizVisible = $('quizScreen').style.display === 'block';
+  if (!quizVisible || state.answered) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  let position = -1;
+  if (e.key >= '1' && e.key <= '4') position = parseInt(e.key, 10) - 1;
+  else {
+    const upper = e.key.toUpperCase();
+    if (upper >= 'A' && upper <= 'D') position = upper.charCodeAt(0) - 'A'.charCodeAt(0);
+  }
+  if (position < 0) return;
+
+  const items = document.querySelectorAll('#optionsList li');
+  if (position >= items.length) return;
+  e.preventDefault();
+  const li = items[position];
+  const origIdx = parseInt(li.dataset.idx, 10);
+  pickAnswer(li, origIdx);
+}
+
+// ── Wire up static event listeners ──
+
+function wireEvents() {
+  $('themeToggle').addEventListener('click', toggleDarkMode);
+  $('backToDashboard').addEventListener('click', goDashboard);
+  $('backToThemes').addEventListener('click', goThemes);
+  $('backToTopics').addEventListener('click', goHome);
+  $('backFromProgress').addEventListener('click', goDashboard);
+  $('practiceWrongBtn').addEventListener('click', practiceWrongAnswers);
+  $('tryAgainBtn').addEventListener('click', () => startQuiz(state.lastTopic));
+  $('pickAnotherBtn').addEventListener('click', goHome);
+  $('resultsHomeBtn').addEventListener('click', goDashboard);
+  document.addEventListener('keydown', handleKeyboardShortcut);
+}
+
+// ── Expose to global (for back-compat & debugging) ──
+
 window.QuizApp = {
-  startQuiz: startQuiz,
-  goHome: goHome,
-  goThemes: goThemes,
-  goDashboard: goDashboard,
-  renderDashboard: renderDashboard,
-  toggleDarkMode: toggleDarkMode,
-  practiceWrongAnswers: practiceWrongAnswers,
-  startReviewMode: startReviewMode,
-  showProgress: showProgress
+  startQuiz, goHome, goThemes, goDashboard,
+  renderDashboard, toggleDarkMode,
+  practiceWrongAnswers, startReviewMode, showProgress,
 };
 
 // ── Init ──
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  wireEvents();
   renderDashboard();
 });
 
