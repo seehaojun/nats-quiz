@@ -286,6 +286,7 @@ body {
 .theme-card.interactions:hover { border-color: #c4b5fd; background: #f5f3ff; }
 .theme-card.matter:hover       { border-color: #5eead4; background: #f0fdfa; }
 .theme-card.magnets:hover      { border-color: #f9a8d4; background: #fdf2f8; }
+.theme-card.julywa2026:hover   { border-color: #fbbf24; background: #fffbeb; }
 .theme-card.grammar:hover      { border-color: #86efac; background: #f0fdf4; }
 .theme-card.vocabulary:hover   { border-color: #93c5fd; background: #eff6ff; }
 .theme-card.comprehension:hover{ border-color: #c4b5fd; background: #f5f3ff; }
@@ -1123,6 +1124,7 @@ body {
 [data-theme="dark"] .theme-card.money:hover,
 [data-theme="dark"] .theme-card.chengyu:hover  { background: #3a1729; border-color: #db2777; }
 [data-theme="dark"] .theme-card.vocabcloze:hover { background: #2a2410; border-color: #d97706; }
+[data-theme="dark"] .theme-card.julywa2026:hover { background: #2a2410; border-color: #f59e0b; }
 [data-theme="dark"] .theme-card.openended:hover { background: #2a2410; border-color: #f59e0b; }
 
 /* Open-ended question feedback in dark mode */

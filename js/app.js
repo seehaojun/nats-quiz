@@ -1048,6 +1048,8 @@ function handleKeyboardShortcut(e) {
   const quizVisible = $('quizScreen').style.display === 'block';
   if (!quizVisible || state.answered) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
 
   let position = -1;
   if (e.key >= '1' && e.key <= '4') position = parseInt(e.key, 10) - 1;

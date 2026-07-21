@@ -18,6 +18,7 @@ const QuizLoader = {
     interactions:  { subject: 'science', name: 'Interactions',              icon: '🤝',  color: 'interactions',  description: 'Food chains, adaptations, environment' },
     matter:        { subject: 'science', name: 'Matter',                    icon: '🧊',  color: 'matter',        description: 'States of matter, changes of state' },
     magnets:       { subject: 'science', name: 'Magnets',                   icon: '🧲',  color: 'magnets',       description: 'Magnetic properties, poles, uses of magnets' },
+    julywa2026:    { subject: 'science', name: 'July 2026 WA Revision',     icon: '📝',  color: 'julywa2026',    description: 'Focused revision: Magnets, Matter, Light & Shadows' },
     openended:     { subject: 'science', name: 'Open-Ended Questions',      icon: '✍️',  color: 'openended',     description: 'Long-form answers across all Science topics, graded by Claude' },
     // English
     grammar:       { subject: 'english', name: 'Grammar',                   icon: '✏️',  color: 'grammar',       description: 'Tenses, articles, prepositions, conjunctions' },
@@ -169,6 +170,7 @@ const QuizLoader = {
       money: { ch1: 'Chapter 1: Addition & Subtraction of Money', ch2: 'Chapter 2: Word Problems with Money' },
       decimals: { ch1: 'Chapter 1: Understanding Decimals', ch2: 'Chapter 2: Comparing & Ordering Decimals', ch3: 'Chapter 3: Operations with Decimals' },
       vocabcloze: { ch1: 'Everyday Words', ch2: 'Descriptive Words', ch3: 'Action Words' },
+      julywa2026: { magnetProps: 'Properties of Magnets', magnetMaking: 'Making Magnets & Uses', light: 'Light', shadows: 'Shadows', matter: 'Matter & Its States', open: 'Short Answer Questions' },
     };
     if (overrides[themeId]) {
       for (const k in overrides[themeId]) {
